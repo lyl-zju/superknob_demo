@@ -117,11 +117,11 @@ static void lamp_btn_event_handler(lv_event_t * e)
     lv_event_code_t code = lv_event_get_code(e);
 
     if(code == LV_EVENT_CLICKED) {
-        // set_super_knob_page_status(SUPER_PAGE_BUSY);
-        // setup_scr_screen_pointer(&super_knob_ui);
-        // lv_scr_load_anim(super_knob_ui.screen_iot_pointer, LV_SCR_LOAD_ANIM_FADE_ON, 100, 10, true);
-        // update_motor_config(2);
-        // update_page_status(CHECKOUT_PAGE);
+        set_super_knob_page_status(SUPER_PAGE_BUSY);
+        setup_scr_screen_pointer(&super_knob_ui);
+        lv_scr_load_anim(super_knob_ui.screen_iot_pointer, LV_SCR_LOAD_ANIM_FADE_ON, 100, 10, true);
+        update_motor_config(2);
+        update_page_status(CHECKOUT_PAGE);
     }
     else if(code == LV_EVENT_VALUE_CHANGED) {
         //LV_LOG_USER("Toggled");
@@ -133,10 +133,10 @@ static void sensor_btn_event_handler(lv_event_t * e)
     lv_event_code_t code = lv_event_get_code(e);
 
     if(code == LV_EVENT_CLICKED) {
-        // update_page_status(CHECKOUT_PAGE);
-        // set_super_knob_page_status(SUPER_PAGE_BUSY);
-        // setup_scr_screen_iot_sensor(&super_knob_ui);
-        // lv_scr_load_anim(super_knob_ui.screen_iot_sensor, LV_SCR_LOAD_ANIM_FADE_ON, 200, 100, true);
+        update_page_status(CHECKOUT_PAGE);
+        set_super_knob_page_status(SUPER_PAGE_BUSY);
+        setup_scr_screen_iot_sensor(&super_knob_ui);
+        lv_scr_load_anim(super_knob_ui.screen_iot_sensor, LV_SCR_LOAD_ANIM_FADE_ON, 200, 100, true);
     }
     else if(code == LV_EVENT_VALUE_CHANGED) {
         //LV_LOG_USER("Toggled");
@@ -179,10 +179,10 @@ static void tomato_btn_event_handler(lv_event_t * e)
     lv_event_code_t code = lv_event_get_code(e);
 
     if(code == LV_EVENT_CLICKED) {
-        // update_page_status(CHECKOUT_PAGE);
-        // set_super_knob_page_status(SUPER_PAGE_BUSY);
-        // setup_scr_screen_tomato_clock(&super_knob_ui);
-        // lv_scr_load_anim(super_knob_ui.screen_iot_tomato_clock, LV_SCR_LOAD_ANIM_FADE_ON, 200, 100, true);
+        update_page_status(CHECKOUT_PAGE);
+        set_super_knob_page_status(SUPER_PAGE_BUSY);
+        setup_scr_screen_tomato_clock(&super_knob_ui);
+        lv_scr_load_anim(super_knob_ui.screen_iot_tomato_clock, LV_SCR_LOAD_ANIM_FADE_ON, 200, 100, true);
     }
     else if(code == LV_EVENT_VALUE_CHANGED) {
         //LV_LOG_USER("Toggled");
@@ -212,10 +212,10 @@ static void about_btn_event_handler(lv_event_t * e)
     lv_event_code_t code = lv_event_get_code(e);
 
     if(code == LV_EVENT_CLICKED) {
-        // update_page_status(CHECKOUT_PAGE);
-        // set_super_knob_page_status(SUPER_PAGE_BUSY);
-        // setup_scr_screen_about(&super_knob_ui);
-        // lv_scr_load_anim(super_knob_ui.screen_about, LV_SCR_LOAD_ANIM_FADE_ON, 200, 100, true);
+        update_page_status(CHECKOUT_PAGE);
+        set_super_knob_page_status(SUPER_PAGE_BUSY);
+        setup_scr_screen_about(&super_knob_ui);
+        lv_scr_load_anim(super_knob_ui.screen_about, LV_SCR_LOAD_ANIM_FADE_ON, 200, 100, true);
     }
     else if(code == LV_EVENT_VALUE_CHANGED) {
         //LV_LOG_USER("Toggled");

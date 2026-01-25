@@ -34,66 +34,67 @@ void my_disp_flush(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *color
 }
 /*-----------------------------------------------------------------------*/
 
-// static bool touch_pad_press(int gpio)
-// {
-//     static int press_cnt = 0;
-//     bool ret_cnt = false;
-//     if(touchRead(gpio) < 15){
-//         press_cnt ++;
-//         //10ms 消抖
-//         if (press_cnt > 4) {
-//             if( touchRead(gpio) < 15){
-//                 ret_cnt = true;
-//                 press_cnt = -8;
-//             }
-//         }
-//     }else{
-//         press_cnt = 0;
-//     }
+static bool touch_pad_press(int gpio)
+{
+    static int press_cnt = 0;
+    bool ret_cnt = false;
+    if(touchRead(gpio) < 15){
+        press_cnt ++;
+        //10ms 消抖
+        if (press_cnt > 4) {
+            if( touchRead(gpio) < 15){
+                ret_cnt = true;
+                press_cnt = -8;
+            }
+        }
+    }else{
+        press_cnt = 0;
+    }
     
-//     return ret_cnt;
-// }
+    return ret_cnt;
+}
 
 
-// //检测页面退出逻辑
-// void page_status_check(void)
-// {
-//     SUPER_KNOB_PAGE_NUM now_page = get_super_knob_page_status();
-//     switch (now_page)
-//     {
-//     // case WELCOME_PAGE:
-//     //     break;
-//     // case WELCOME_PAGE:
-//     //     break;
-//     case IOT_LIGHT_BELT_PAGE:
-//         if(touch_pad_press(ESP32_TOUCH_PIN1)){
-//             ext_iot_light_belt_page();
-//             setup_scr_screen_iot_main(&super_knob_ui);
-//             lv_scr_load_anim(super_knob_ui.screen_iot_main_boday, LV_SCR_LOAD_ANIM_FADE_ON, 100, 10, false);
-//             set_super_knob_page_status(SUPER_PAGE_BUSY);
-//             update_motor_config(1);
-//             update_page_status(CHECKOUT_PAGE);
-//         }
-//         break;
-//     case IOT_SENSOR_PAGE:
-//     case IOT_POINTER_PAGE:
-//         if(touch_pad_press(ESP32_TOUCH_PIN1)){
-//             setup_scr_screen_iot_main(&super_knob_ui);
-//             lv_scr_load_anim(super_knob_ui.screen_iot_main_boday, LV_SCR_LOAD_ANIM_FADE_ON, 100, 10, false);
-//             set_super_knob_page_status(SUPER_PAGE_BUSY);
-//             update_motor_config(1);
-//             update_page_status(CHECKOUT_PAGE);
-//         }
-//         break;
-//     default:
-//         break;
-//     }
+//检测页面退出逻辑
+void page_status_check(void)
+{
+    SUPER_KNOB_PAGE_NUM now_page = get_super_knob_page_status();
+    switch (now_page)
+    {
+    // case WELCOME_PAGE:
+    //     break;
+    // case WELCOME_PAGE:
+    //     break;
+    // case IOT_LIGHT_BELT_PAGE:
+    //     if(touch_pad_press(ESP32_TOUCH_PIN1)){
+    //         ext_iot_light_belt_page();
+    //         setup_scr_screen_iot_main(&super_knob_ui);
+    //         lv_scr_load_anim(super_knob_ui.screen_iot_main_boday, LV_SCR_LOAD_ANIM_FADE_ON, 100, 10, false);
+    //         set_super_knob_page_status(SUPER_PAGE_BUSY);
+    //         update_motor_config(1);
+    //         update_page_status(CHECKOUT_PAGE);
+    //     }
+    //     break;
+    case IOT_SENSOR_PAGE:
+    case IOT_POINTER_PAGE:
+        if(touch_pad_press(ESP32_TOUCH_PIN1)){
+            setup_scr_screen_iot_main(&super_knob_ui);
+            lv_scr_load_anim(super_knob_ui.screen_iot_main_boday, LV_SCR_LOAD_ANIM_FADE_ON, 100, 10, false);
+            set_super_knob_page_status(SUPER_PAGE_BUSY);
+            update_motor_config(1);
+            update_page_status(CHECKOUT_PAGE);
+        }
+        break;
+    default:
+        break;
+    }
 
-// }
+}
 
 /*Will be called by the library to read the encoder*/
 static void encoder_read(lv_indev_drv_t *indev_drv, lv_indev_data_t *data)
 {
+    //Serial.println(touchRead(ESP32_TOUCH_PIN1));
     static int now_num = 0;
     static int old_num = 0;
     now_num = get_motor_position();
@@ -112,14 +113,14 @@ static void encoder_read(lv_indev_drv_t *indev_drv, lv_indev_data_t *data)
         //update_ws2812_status(WS2812_ROLL, 10);
     }
 
-    // if(touch_pad_press(ESP32_TOUCH_PIN1)){
-    //     //update_ws2812_status(WS2812_METEOR_OVERTURN, 10);
-    //     data->state = LV_INDEV_STATE_PR;
-    // }else{
-    //     data->state = LV_INDEV_STATE_REL;
-    // }
+    if(touch_pad_press(ESP32_TOUCH_PIN1)){
+        //update_ws2812_status(WS2812_METEOR_OVERTURN, 10);
+        data->state = LV_INDEV_STATE_PR;
+    }else{
+        data->state = LV_INDEV_STATE_REL;
+    }
 
-    //page_status_check();
+    page_status_check();
 }
 
 void poweron_timeout(TimerHandle_t pxTimer)

@@ -17,11 +17,10 @@
 
 #define LVGL_RUNNING_CORE   0            //内核选择   LVGL用核心0  其他用核心1
 #define ESP32_RUNNING_CORE  1            //内核选择   LVGL用核心0  其他用核心1
-#define ESP32_TOUCH_PIN1    33           //
-#define ESP32_TOUCH_PIN2    32           //
-#define ESP32_TOUCH_PIN3    12           //
-#define WS2812_PIN          11           //定义选择引脚
-#define WS2812_NUM          4            //定义led个数，决定数组长度
+#define ESP32_TOUCH_PIN1    0           //
+#define ESP32_TOUCH_PIN2    2           //
+//#define WS2812_PIN          11           //定义选择引脚
+//#define WS2812_NUM          4            //定义led个数，决定数组长度
 
 struct _knob_message
 {
