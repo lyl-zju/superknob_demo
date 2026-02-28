@@ -7,11 +7,13 @@
  * @LastEditTime: 2022-07-24 00:40:20
  */
 #include "lvgl.h"
+#include <TFT_eSPI.h>
 #include <stdio.h>
 #include "gui_super_knob.h"
 #include <Arduino.h>
 #include <motor.h>
 #include <display.h>
+#include "bluetooth_mouse.h"
 
 //图片初始化
 LV_IMG_DECLARE(lamp_img);
@@ -143,19 +145,22 @@ static void sensor_btn_event_handler(lv_event_t * e)
     }
 }
 
+// 引入在 display.cpp 中定义的标志位
+extern bool enter_pc_mode_flag;
+extern int current_os_mode; // 引入 RTC 变量
+
 static void sensor_computer_event_handler(lv_event_t * e)
 {
     lv_event_code_t code = lv_event_get_code(e);
     if(code == LV_EVENT_CLICKED) {
-        // update_page_status(CHECKOUT_PAGE);
-        // set_super_knob_page_status(SUPER_PAGE_BUSY);
-        // setup_scr_screen_player(&super_knob_ui);
-        // lv_scr_load_anim(super_knob_ui.screen_iot_player, LV_SCR_LOAD_ANIM_FADE_ON, 200, 100, true);
+       // 1. 改变电机手感为顺滑无阻尼
+        update_motor_config(0); 
+        
+        // 2. 将标记改为 1 (电脑系统)，并极速重启！
+        current_os_mode = 1; 
+        Serial.println("Switching to PC OS...");
+        ESP.restart();
     }
-    else if(code == LV_EVENT_VALUE_CHANGED) {
-        //LV_LOG_USER("Toggled");
-    }
-
 }
 
 static void fan_btn_event_handler(lv_event_t * e)
@@ -179,10 +184,17 @@ static void tomato_btn_event_handler(lv_event_t * e)
     lv_event_code_t code = lv_event_get_code(e);
 
     if(code == LV_EVENT_CLICKED) {
-        update_page_status(CHECKOUT_PAGE);
+       // 1. 设为忙碌
         set_super_knob_page_status(SUPER_PAGE_BUSY);
+        // 2. 加载 UI
         setup_scr_screen_tomato_clock(&super_knob_ui);
         lv_scr_load_anim(super_knob_ui.screen_iot_tomato_clock, LV_SCR_LOAD_ANIM_FADE_ON, 200, 100, true);
+        
+        // 3. 设置电机手感 (2 表示顺滑的阻尼感，根据你的 motor.cpp 配置来定)
+        update_motor_config(2);
+        
+        // 4. 通知电机任务
+        update_page_status(CHECKOUT_PAGE);
     }
     else if(code == LV_EVENT_VALUE_CHANGED) {
         //LV_LOG_USER("Toggled");
@@ -252,27 +264,27 @@ void setup_scr_screen_iot_main(lv_ui *ui)
     lv_obj_add_event_cb(lamp_btn, lamp_btn_event_handler, LV_EVENT_ALL, NULL);
     lv_set_scroll_box(lamp_btn, (void *)&lamp_img, "台灯");
 
-    lv_obj_t* leds_btn = lv_btn_create(ui->screen_iot_main);
-    lv_obj_add_event_cb(leds_btn, sensor_leds_event_handler, LV_EVENT_ALL, NULL);
-    lv_set_scroll_box(leds_btn, (void *)&leds_img, "灯带");
+    // lv_obj_t* leds_btn = lv_btn_create(ui->screen_iot_main);
+    // lv_obj_add_event_cb(leds_btn, sensor_leds_event_handler, LV_EVENT_ALL, NULL);
+    // lv_set_scroll_box(leds_btn, (void *)&leds_img, "灯带");
 
-    lv_obj_t* fan_btn = lv_btn_create(ui->screen_iot_main);
-    lv_obj_add_event_cb(fan_btn, fan_btn_event_handler, LV_EVENT_ALL, NULL);
-    lv_set_scroll_box(fan_btn, (void *)&fan_img, "风扇");
+    // lv_obj_t* fan_btn = lv_btn_create(ui->screen_iot_main);
+    // lv_obj_add_event_cb(fan_btn, fan_btn_event_handler, LV_EVENT_ALL, NULL);
+    // lv_set_scroll_box(fan_btn, (void *)&fan_img, "风扇");
 
     lv_obj_t* tomato_btn = lv_btn_create(ui->screen_iot_main);
     lv_obj_add_event_cb(tomato_btn, tomato_btn_event_handler, LV_EVENT_ALL, NULL);
     lv_set_scroll_box(tomato_btn, (void *)&tomato_img, "番茄");
 
-    lv_obj_t* socket_btn = lv_btn_create(ui->screen_iot_main);
-    lv_set_scroll_box(socket_btn, (void *)&socket_img, "插座");
+    // lv_obj_t* socket_btn = lv_btn_create(ui->screen_iot_main);
+    // lv_set_scroll_box(socket_btn, (void *)&socket_img, "插座");
 
     lv_obj_t* computer_btn = lv_btn_create(ui->screen_iot_main);
     lv_obj_add_event_cb(computer_btn, sensor_computer_event_handler, LV_EVENT_ALL, NULL);
     lv_set_scroll_box(computer_btn, (void *)&computer_img, "电脑");
 
-    lv_obj_t* air_cond_btn = lv_btn_create(ui->screen_iot_main);
-    lv_set_scroll_box(air_cond_btn, (void *)&air_cond_img, "空调");
+    // lv_obj_t* air_cond_btn = lv_btn_create(ui->screen_iot_main);
+    // lv_set_scroll_box(air_cond_btn, (void *)&air_cond_img, "空调");
 
     lv_obj_t* sensor_btn = lv_btn_create(ui->screen_iot_main);
     lv_obj_add_event_cb(sensor_btn, sensor_btn_event_handler, LV_EVENT_ALL, NULL);

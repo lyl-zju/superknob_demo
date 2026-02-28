@@ -1,18 +1,24 @@
-#include <display.h>
+#include "display.h"
 #include <lvgl.h>
 #include <TFT_eSPI.h>
 #include <main.h>
 #include <motor.h>
 #include "ui_pages/gui_super_knob.h"
+#include "esp_heap_caps.h"
+
 
 
 TimerHandle_t poweron_tmr;
 static const uint16_t screenWidth = 240;
 static const uint16_t screenHeight = 320;
 static lv_disp_draw_buf_t draw_buf;
-static lv_color_t buf_1[screenWidth * screenHeight/4];      //缓冲区1
-static lv_color_t buf_2[screenWidth * screenHeight/4];      //缓冲区2(双缓冲)
+// static lv_color_t buf_1[screenWidth * screenHeight/4];      //缓冲区1
+// static lv_color_t buf_2[screenWidth * screenHeight/4];      //缓冲区2(双缓冲)
+// 替换为下面这两行指针定义
+lv_color_t *buf_1 = NULL;
+lv_color_t *buf_2 = NULL;
 lv_ui super_knob_ui;
+
 
 
 TFT_eSPI tft = TFT_eSPI(screenWidth, screenHeight); /* TFT instance */
@@ -83,6 +89,15 @@ void page_status_check(void)
             set_super_knob_page_status(SUPER_PAGE_BUSY);
             update_motor_config(1);
             update_page_status(CHECKOUT_PAGE);
+        }
+        break;
+    case IOT_COMPUTER_PAGE: 
+        if(touch_pad_press(ESP32_TOUCH_PIN1)){
+            // 【激进操作】：因为我们把 LVGL 画板砸了，没法正常退回去了。
+            // 最干净利落的方法：直接重启单片机！
+            // ESP32 重启非常快，大概 1-2 秒就能看到主菜单，就当是退出动画了。
+            Serial.println("Rebooting to exit PC mode...");
+            ESP.restart(); 
         }
         break;
     default:
@@ -166,7 +181,24 @@ void Task_lvgl(void *pvParameters)
     tft.begin();        /* TFT init */
     tft.initDMA();
     tft.setRotation(0); /* Landscape orientation, flipped */
-    lv_disp_draw_buf_init(&draw_buf, buf_1, NULL, screenWidth * screenHeight/4); //开启双缓冲
+
+    // --- 新增动态分配内存逻辑 ---
+    // 将缓冲区大小设为屏幕大小的 1/4，既节省内存又能保证流畅度
+    uint32_t buf_size = screenWidth * screenHeight / 4;
+    
+    // 使用 heap_caps_malloc 分配支持 DMA 的内存
+    buf_1 = (lv_color_t *)heap_caps_malloc(buf_size * sizeof(lv_color_t), MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
+    buf_2 = (lv_color_t *)heap_caps_malloc(buf_size * sizeof(lv_color_t), MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
+
+    // 检查内存是否分配成功，如果成功则初始化 LVGL 缓冲区
+    if (buf_1 != NULL && buf_2 != NULL) {
+        lv_disp_draw_buf_init(&draw_buf, buf_1, buf_2, buf_size); 
+    } else {
+        Serial.println("[Error] LVGL buffer allocation failed!");
+        // 如果分配失败，你可以考虑把 buf_size 进一步改小，比如 /8 或 /10
+    }
+
+    // ----------------------------
     /*Initialize the display*/
     static lv_disp_drv_t disp_drv;      //创建显示驱动变量
     lv_disp_drv_init(&disp_drv);        //初始化显示驱动
@@ -200,36 +232,36 @@ void Task_lvgl(void *pvParameters)
 
     for (;;)
     {
-        //监听电机运行状态
-        struct _knob_message *motor_message;
-        if (xQueueReceive(motor_msg_Queue, &(motor_message), (TickType_t)1))
-        {
-            Serial.print("lvgl_msg_Queue --->");
-            Serial.println(motor_message->ucMessageID);
-            switch(motor_message->ucMessageID){
-                case MOTOR_INIT:
-                    if(super_knob_ui.power_on_bar)
-                    lv_bar_set_value(super_knob_ui.power_on_bar, 30, LV_ANIM_ON);
-                break;
-                case MOTOR_INIT_SUCCESS:
-                    if(super_knob_ui.power_on_bar)
-                    lv_bar_set_value(super_knob_ui.power_on_bar, 75, LV_ANIM_ON);
-                break;
-                case MOTOR_INIT_END:
-                {
-                    if(super_knob_ui.power_on_bar)
-                    lv_bar_set_value(super_knob_ui.power_on_bar, 100, LV_ANIM_ON);
-                    
-                    lv_timer_t *_check_timer = lv_timer_create(check_timerout, 800, NULL);  //创建定时器
-                    lv_timer_set_repeat_count(_check_timer, 1);     //设置定时器只运行一次
-                }    
-                break;
-                default:
-                break;
+            //监听电机运行状态
+            struct _knob_message *motor_message;
+            if (xQueueReceive(motor_msg_Queue, &(motor_message), (TickType_t)1))
+            {
+                Serial.print("lvgl_msg_Queue --->");
+                Serial.println(motor_message->ucMessageID);
+                switch(motor_message->ucMessageID){
+                    case MOTOR_INIT:
+                        if(super_knob_ui.power_on_bar)
+                        lv_bar_set_value(super_knob_ui.power_on_bar, 30, LV_ANIM_ON);
+                    break;
+                    case MOTOR_INIT_SUCCESS:
+                        if(super_knob_ui.power_on_bar)
+                        lv_bar_set_value(super_knob_ui.power_on_bar, 75, LV_ANIM_ON);
+                    break;
+                    case MOTOR_INIT_END:
+                    {
+                        if(super_knob_ui.power_on_bar)
+                        lv_bar_set_value(super_knob_ui.power_on_bar, 100, LV_ANIM_ON);
+                        
+                        lv_timer_t *_check_timer = lv_timer_create(check_timerout, 800, NULL);  //创建定时器
+                        lv_timer_set_repeat_count(_check_timer, 1);     //设置定时器只运行一次
+                    }    
+                    break;
+                    default:
+                    break;
+                }
             }
-        }
 
-        lv_task_handler(); /* let the GUI do its work */
-        vTaskDelay(1);
+            lv_task_handler(); /* let the GUI do its work */
+            vTaskDelay(1);
     }
 }

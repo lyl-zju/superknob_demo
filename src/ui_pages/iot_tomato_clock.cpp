@@ -271,7 +271,7 @@ void setup_scr_screen_tomato_clock(lv_ui *ui)
 
 
     //刷新页面调度器
-    set_super_knob_page_status(IOT_COMPUTER_PAGE);
+    set_super_knob_page_status(IOT_TOMATO_PAGE);
     //创建相关定时器
     tomato_tmr = xTimerCreate("tomato_Timer", (1000), pdTRUE, (void *)0, tomato_timeout);
     alarm_clock = xTimerCreate("alarm_clock", (1000), pdTRUE, (void *)0, alarm_clock_timeout);
