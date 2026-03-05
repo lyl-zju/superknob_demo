@@ -44,11 +44,13 @@ static bool touch_pad_press(int gpio)
 {
     static int press_cnt = 0;
     bool ret_cnt = false;
-    if(touchRead(gpio) < 15){
+    Serial.println(touchRead(gpio));
+    if(touchRead(gpio) < 30){
+        
         press_cnt ++;
         //10ms 消抖
         if (press_cnt > 4) {
-            if( touchRead(gpio) < 15){
+            if( touchRead(gpio) < 30){
                 ret_cnt = true;
                 press_cnt = -8;
             }
@@ -109,7 +111,7 @@ void page_status_check(void)
 /*Will be called by the library to read the encoder*/
 static void encoder_read(lv_indev_drv_t *indev_drv, lv_indev_data_t *data)
 {
-    //Serial.println(touchRead(ESP32_TOUCH_PIN1));
+    Serial.println(touchRead(ESP32_TOUCH_PIN1));
     static int now_num = 0;
     static int old_num = 0;
     now_num = get_motor_position();

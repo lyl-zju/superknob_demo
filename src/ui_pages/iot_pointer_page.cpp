@@ -22,7 +22,7 @@ void indic_update_timer(lv_timer_t *timer)
 {
     /*Use the user_data*/
     uint32_t *user_data = (uint32_t *)timer->user_data;
-    //Serial.println(*user_data);
+    Serial.println(*user_data);
     lv_meter_set_indicator_value(super_knob_ui.screen_iot_pointer, super_knob_ui.screen_iot_pointer_indic, get_motor_position()); //主动设置数值
 
 }

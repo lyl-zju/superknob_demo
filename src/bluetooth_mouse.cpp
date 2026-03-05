@@ -80,8 +80,16 @@ void run_pc_mouse_logic(float raw_angle, float velocity) {
     if (now - shake_timer > 400) shake_state = 0; 
 
     // ================= 2. 四模态触感引擎 =================
-    float angle = raw_angle - pc_enc_zero; 
-    float torque = 0;
+        float angle = raw_angle - pc_enc_zero; 
+        float error = angle; // 目标都在 0 位置
+        static float prev_error = 0;
+        static const float Kd = 2.0f;   // 微分增益，可根据调试调整
+
+        // 假定此函数大约每 1 ms 调用一次，差分项乘以采样率以放大
+        float derivative = (error - prev_error) * 1000.0f;
+        prev_error = error;
+
+        float torque = 0;
 
     switch (current_pc_mode) {
         case 0: { // 网页滚轮
@@ -100,7 +108,8 @@ void run_pc_mouse_logic(float raw_angle, float velocity) {
             else if (angle < -2.0) torque = -20.0 * (angle + 2.0);
             else torque = 0; 
             
-            float vol_sector = 0.15; 
+            // 表示每转过 0.08 弧度就触发一次音量增减
+            float vol_sector = 0.08; 
             int vol_idx = round(angle / vol_sector);
             if (Keyboard.isConnected() && vol_idx != last_vol_idx) {
                 if (vol_idx > last_vol_idx) Keyboard.write(KEY_MEDIA_VOLUME_UP);
@@ -110,7 +119,7 @@ void run_pc_mouse_logic(float raw_angle, float velocity) {
             break;
         }
         case 2: { // Alt+Tab
-            torque = -15.0 * angle; 
+            torque = -12.0 * angle; 
             if (Keyboard.isConnected()) {
                 if (abs(angle) > 0.55) { 
                     if (!is_alt_pressed) {
@@ -160,5 +169,7 @@ void run_pc_mouse_logic(float raw_angle, float velocity) {
     // ================= 3. 输出力矩给 SimpleFOC =================
     // 因为你在 motor.cpp 里设置了 motor.controller = MotionControlType::torque;
     // 直接传电压/力矩值即可
+        // 添加微分阻尼项
+        // torque += -Kd * derivative;
     motor.move(torque);
 }
