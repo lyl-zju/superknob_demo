@@ -13,7 +13,9 @@
 typedef enum
 {
     CHECKOUT_PAGE,
-    BUTTON_CLICK
+    BUTTON_CLICK,
+    MUSIC_PLAY,
+    MUSIC_STOP
 
 } DISPLAY_STATUS_E;
 

@@ -24,6 +24,7 @@ LV_IMG_DECLARE(air_cond_img);
 LV_IMG_DECLARE(sensor_img);
 LV_IMG_DECLARE(fan_img);
 LV_IMG_DECLARE(tomato_img);
+LV_IMG_DECLARE(music_img);
 LV_IMG_DECLARE(about_img);
 
 static void scroll_event_cb(lv_event_t *e)
@@ -202,6 +203,21 @@ static void tomato_btn_event_handler(lv_event_t * e)
 
 }
 
+static void music_btn_event_handler(lv_event_t * e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+
+    if(code == LV_EVENT_CLICKED) {
+        set_super_knob_page_status(SUPER_PAGE_BUSY);
+        setup_scr_screen_iot_music(&super_knob_ui);
+        lv_scr_load_anim(super_knob_ui.screen_iot_music, LV_SCR_LOAD_ANIM_FADE_ON, 200, 100, true);
+        update_page_status(MUSIC_PLAY);
+    }
+    else if(code == LV_EVENT_VALUE_CHANGED) {
+        //LV_LOG_USER("Toggled");
+    }
+}
+
 static void sensor_leds_event_handler(lv_event_t * e)
 {
     lv_event_code_t code = lv_event_get_code(e);
@@ -275,6 +291,10 @@ void setup_scr_screen_iot_main(lv_ui *ui)
     lv_obj_t* tomato_btn = lv_btn_create(ui->screen_iot_main);
     lv_obj_add_event_cb(tomato_btn, tomato_btn_event_handler, LV_EVENT_ALL, NULL);
     lv_set_scroll_box(tomato_btn, (void *)&tomato_img, "番茄");
+
+    lv_obj_t* music_btn = lv_btn_create(ui->screen_iot_main);
+    lv_obj_add_event_cb(music_btn, music_btn_event_handler, LV_EVENT_ALL, NULL);
+    lv_set_scroll_box(music_btn, (void *)&music_img, "音乐");
 
     // lv_obj_t* socket_btn = lv_btn_create(ui->screen_iot_main);
     // lv_set_scroll_box(socket_btn, (void *)&socket_img, "插座");

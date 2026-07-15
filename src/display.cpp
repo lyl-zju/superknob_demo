@@ -64,6 +64,14 @@ static bool touch_pad_press(int gpio)
 
 
 //检测页面退出逻辑
+static void return_to_iot_main_page(void)
+{
+    setup_scr_screen_iot_main(&super_knob_ui);
+    lv_scr_load_anim(super_knob_ui.screen_iot_main_boday, LV_SCR_LOAD_ANIM_FADE_ON, 100, 10, false);
+    set_super_knob_page_status(SUPER_PAGE_BUSY);
+    update_motor_config(1);
+}
+
 void page_status_check(void)
 {
     SUPER_KNOB_PAGE_NUM now_page = get_super_knob_page_status();
@@ -91,6 +99,11 @@ void page_status_check(void)
             set_super_knob_page_status(SUPER_PAGE_BUSY);
             update_motor_config(1);
             update_page_status(CHECKOUT_PAGE);
+        }
+        break;
+    case IOT_MUSIC_PAGE:
+        if(touch_pad_press(ESP32_TOUCH_PIN1)){
+            update_page_status(MUSIC_STOP);
         }
         break;
     case IOT_COMPUTER_PAGE: 
@@ -257,6 +270,14 @@ void Task_lvgl(void *pvParameters)
                         lv_timer_t *_check_timer = lv_timer_create(check_timerout, 800, NULL);  //创建定时器
                         lv_timer_set_repeat_count(_check_timer, 1);     //设置定时器只运行一次
                     }    
+                    break;
+                    case MOTOR_MUSIC_END:
+                    {
+                        if(get_super_knob_page_status() == IOT_MUSIC_PAGE)
+                        {
+                            return_to_iot_main_page();
+                        }
+                    }
                     break;
                     default:
                     break;

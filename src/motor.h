@@ -36,6 +36,7 @@ typedef enum
     MOTOR_INIT,
     MOTOR_INIT_SUCCESS,
     MOTOR_INIT_END,
+    MOTOR_MUSIC_END,
     DEV_WORK_MODE,
     DEV_BLE_WORK,
 

@@ -29,11 +29,10 @@ typedef struct
 
     lv_obj_t *screen_alarm_clock;
     lv_obj_t *screen_iot_sensor;
-    lv_obj_t *screen_iot_player;
-    lv_obj_t *screen_iot_player_play_img;
     lv_obj_t *screen_iot_tomato_clock;
     lv_obj_t *screen_iot_light_belt;
     lv_obj_t *screen_iot_smart_fan;
+    lv_obj_t *screen_iot_music;
     lv_obj_t *screen_about;
     
     lv_indev_t *indev_encoder; //编码器输入
@@ -50,6 +49,7 @@ typedef enum
     IOT_COMPUTER_PAGE,
     IOT_LIGHT_BELT_PAGE,
     IOT_SMART_FAN_PAGE,
+    IOT_MUSIC_PAGE,
     ABOUT_PAGE,
 
     SUPER_PAGE_BUSY,
@@ -63,10 +63,10 @@ void setup_scr_screen_iot_main(lv_ui *ui);
 void setup_scr_screen_pointer(lv_ui *ui);
 void setup_scr_screen_alarm_clock(lv_ui *ui);
 void setup_scr_screen_iot_sensor(lv_ui *ui);
-void setup_scr_screen_player(lv_ui *ui);
 void setup_scr_screen_tomato_clock(lv_ui *ui);
 void setup_scr_screen_light_belt(lv_ui *ui);
 void setup_scr_screen_smart_fan(lv_ui *ui);
+void setup_scr_screen_iot_music(lv_ui *ui);
 void setup_scr_screen_about(lv_ui *ui);
 
 void set_super_knob_page_status(SUPER_KNOB_PAGE_NUM now_page);

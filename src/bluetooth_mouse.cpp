@@ -55,10 +55,10 @@ void run_pc_mouse_logic(float raw_angle, float velocity) {
     
     // ================= 1. 手势检测：摇一摇 =================
     // 直接用 SimpleFOC 算好的 velocity，更精准平滑
-    if (velocity > 15.0f && shake_state == 0) {
+    if (velocity > 14.0f && shake_state == 0) {
         shake_state = 1;         
         shake_timer = now;
-    } else if (velocity < -15.0f && shake_state == 1 && (now - shake_timer < 400)) {
+    } else if (velocity < -14.0f && shake_state == 1 && (now - shake_timer < 400)) {
         // 摇一摇成功，切换模式
         current_pc_mode = (current_pc_mode + 1) % 4; 
         
