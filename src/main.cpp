@@ -3,6 +3,7 @@
 #include <display.h>
 #include <motor.h>
 #include "bluetooth_mouse.h"
+#include "fan_controller.h"
 #include <TFT_eSPI.h>
 #include <esp_system.h> // 引入 ESP32 系统库以获取复位原因
 
@@ -68,6 +69,7 @@ void setup()
         Serial.println("Booting System A: LVGL UI");
         xTaskCreatePinnedToCore(
             Task_lvgl, "Task_lvgl", 4096, NULL, 3, &Task_lvgl_Handle, LVGL_RUNNING_CORE);
+        fan_controller_begin();
 
     }
     else{
