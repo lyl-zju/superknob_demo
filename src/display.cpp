@@ -11,12 +11,10 @@
 TimerHandle_t poweron_tmr;
 static const uint16_t screenWidth = 240;
 static const uint16_t screenHeight = 320;
+static const uint16_t drawBufferLines = 40;
 static lv_disp_draw_buf_t draw_buf;
-// static lv_color_t buf_1[screenWidth * screenHeight/4];      //缓冲区1
-// static lv_color_t buf_2[screenWidth * screenHeight/4];      //缓冲区2(双缓冲)
-// 替换为下面这两行指针定义
-lv_color_t *buf_1 = NULL;
-lv_color_t *buf_2 = NULL;
+static lv_color_t *buf_1 = NULL;
+static bool tft_dma_enabled = false;
 lv_ui super_knob_ui;
 
 
@@ -29,12 +27,15 @@ void my_disp_flush(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *color
     uint32_t w = (area->x2 - area->x1 + 1);
     uint32_t h = (area->y2 - area->y1 + 1);
 
-    //开启DMA传输
-    tft.startWrite();   //开始屏幕写入操作
-    tft.setSwapBytes(true);     //设置字节交换
-    tft.pushImageDMA(area->x1, area->y1, w, h,(uint16_t *)&color_p->full);  //核心传输函数
-    tft.dmaWait();      //等待
-    tft.endWrite();     //结束写入
+    tft.startWrite();
+    tft.setSwapBytes(true);
+    if (tft_dma_enabled) {
+        tft.pushImageDMA(area->x1, area->y1, w, h, (uint16_t *)&color_p->full);
+        tft.dmaWait();
+    } else {
+        tft.pushImage(area->x1, area->y1, w, h, (uint16_t *)&color_p->full);
+    }
+    tft.endWrite();
 
     lv_disp_flush_ready(disp);  //开始下一帧绘制
 }
@@ -193,27 +194,21 @@ void Task_lvgl(void *pvParameters)
     /*初始化显示*/
     lv_init();
 
-    tft.begin();        /* TFT init */
-    tft.initDMA();
+    tft.begin();        /* ST7789 init and backlight enable */
+    tft_dma_enabled = tft.initDMA();
     tft.setRotation(0); /* Landscape orientation, flipped */
 
-    // --- 新增动态分配内存逻辑 ---
-    // 将缓冲区大小设为屏幕大小的 1/4，既节省内存又能保证流畅度
-    uint32_t buf_size = screenWidth * screenHeight / 4;
-    
-    // 使用 heap_caps_malloc 分配支持 DMA 的内存
-    buf_1 = (lv_color_t *)heap_caps_malloc(buf_size * sizeof(lv_color_t), MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
-    buf_2 = (lv_color_t *)heap_caps_malloc(buf_size * sizeof(lv_color_t), MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
-
-    // 检查内存是否分配成功，如果成功则初始化 LVGL 缓冲区
-    if (buf_1 != NULL && buf_2 != NULL) {
-        lv_disp_draw_buf_init(&draw_buf, buf_1, buf_2, buf_size); 
-    } else {
-        Serial.println("[Error] LVGL buffer allocation failed!");
-        // 如果分配失败，你可以考虑把 buf_size 进一步改小，比如 /8 或 /10
+    // A single 40-line buffer uses 19.2 KB instead of two 1/4-screen buffers
+    // (76.8 KB). It is sufficient because LVGL flushes the display in strips.
+    const uint32_t buf_size = screenWidth * drawBufferLines;
+    buf_1 = (lv_color_t *)heap_caps_malloc(
+        buf_size * sizeof(lv_color_t), MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
+    if (buf_1 == NULL) {
+        Serial.println("[Fatal] LVGL DMA buffer allocation failed; display task stopped.");
+        vTaskDelete(NULL);
+        return;
     }
-
-    // ----------------------------
+    lv_disp_draw_buf_init(&draw_buf, buf_1, NULL, buf_size);
     /*Initialize the display*/
     static lv_disp_drv_t disp_drv;      //创建显示驱动变量
     lv_disp_drv_init(&disp_drv);        //初始化显示驱动
