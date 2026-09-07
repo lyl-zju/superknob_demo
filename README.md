@@ -32,11 +32,13 @@
 - **番茄钟** — 计时器
 - **音乐** — 播放一段内置旋律（用电机发声）
 - **游戏** — 钓鱼小游戏（旋钮控制捕捉框，追着鱼移动）
+- **跳一跳** — 一维跳跃小游戏（旋钮弹簧蓄力，松手后起跳）
 - **电脑** — 切换到蓝牙鼠标/键盘模式，把旋钮当电脑外设
 - **传感** — 传感器页面
 - **关于** — 关于页
 
 另有欢迎页、闹钟等页面。
+
 
 ## 旋钮手感（电机模式）
 
@@ -50,6 +52,16 @@
 | 3 | 精细、无档位 |
 | 4 | 两档开关（强档位） |
 | 5 | **纯粘性阻尼**：转动有阻力、松手停住不回弹（钓鱼游戏用） |
+
+跳一跳不使用上述预设配置，而是在 FOC 任务中使用独立的弹簧控制模式。主要参数位于 `src/motor.cpp`：
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `JUMP_MAX_ANGLE_RAD` | 100° | 100% 蓄力对应的最大旋转角度 |
+| `JUMP_MIN_RELEASE_RAD` | 8° | 可触发跳跃的最小蓄力角度 |
+| `JUMP_RELEASE_DROP_RAD` | 3° | 判断旋钮已经松手的回弹角度 |
+| `JUMP_SPRING_STRENGTH` | 3.2 | 弹簧回中力度 |
+| `JUMP_SPRING_DAMPING` | 0.08 | 回中过程的阻尼强度 |
 
 ## 目录结构
 
@@ -65,12 +77,14 @@ src/
     iot_tomato_clock.cpp 番茄钟
     iot_music_page.cpp   音乐
     game_page.cpp        钓鱼游戏
+    jump_page.cpp        一维跳一跳游戏
     iot_sensor_page.cpp  传感
     about_page.cpp       关于
     ...
   ui_image_src/      由 PNG 生成的中文图片 C 数组（字库缺字时用）
 scripts/
-  gen_game_images.py 把 pictures/ 下的中文 PNG 转成 LVGL 图片 C 文件
+  gen_game_images.py  把 pictures/ 下的钓鱼游戏中文 PNG 转成 LVGL 图片 C 文件
+  gen_jump_images.py  生成跳一跳标题和“再来一局”LVGL 图片 C 文件
 pictures/            中文文字素材 PNG（图片生成源）
 ```
 
@@ -95,5 +109,5 @@ platformio run -t upload
 
 ## 说明
 
-- 中文字库 `lv_font_chinese_source_20` 只含少量常用字，缺字的地方（如"游戏"）用 `scripts/gen_game_images.py` 把 PNG 转成图片显示。
-- 游戏最高分存于 RTC 内存，软重启不清零；彻底断电后为随机值，代码里做了越界兜底。
+- 中文字库 `lv_font_chinese_source_20` 只含少量常用字。钓鱼游戏缺少的文字由 `scripts/gen_game_images.py` 转换；跳一跳的标题和“再来一局”由 `scripts/gen_jump_images.py` 生成。
+- 钓鱼游戏最高分存于 RTC 内存，软重启不清零；彻底断电后为随机值，代码里做了越界兜底。跳一跳当前只显示本局实时得分，不保存最高分。
