@@ -35,6 +35,7 @@ typedef struct
     lv_obj_t *screen_iot_music;
     lv_obj_t *screen_about;
     lv_obj_t *screen_game;
+    lv_obj_t *screen_jump;
 
     lv_indev_t *indev_encoder; //编码器输入
     lv_group_t *defult_group;  //默认组   
@@ -53,6 +54,7 @@ typedef enum
     IOT_MUSIC_PAGE,
     ABOUT_PAGE,
     GAME_PAGE,
+    JUMP_PAGE,
 
     SUPER_PAGE_BUSY,
     SUPER_PAGE_MAX,
@@ -71,6 +73,7 @@ void setup_scr_screen_smart_fan(lv_ui *ui);
 void setup_scr_screen_iot_music(lv_ui *ui);
 void setup_scr_screen_about(lv_ui *ui);
 void setup_scr_screen_game(lv_ui *ui);
+void setup_scr_screen_jump(lv_ui *ui);
 
 void set_super_knob_page_status(SUPER_KNOB_PAGE_NUM now_page);
 SUPER_KNOB_PAGE_NUM get_super_knob_page_status(void);

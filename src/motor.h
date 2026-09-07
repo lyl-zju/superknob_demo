@@ -47,5 +47,7 @@ typedef enum
 
 int get_motor_position(void);
 float get_motor_shaft_angle(void);
+float get_jump_charge_percent(void);
+bool consume_jump_release(float *charge_ratio);
 void update_motor_config(int status);
 void Task_foc(void *pvParameters);

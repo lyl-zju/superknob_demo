@@ -17,6 +17,7 @@
 enum MotorWorkMode {
     MOTOR_MODE_KNOB,
     MOTOR_MODE_MUSIC,
+    MOTOR_MODE_JUMP,
 };
 
 static KnobConfig super_knob_configs[] = {
@@ -244,6 +245,18 @@ static MotorWorkMode motor_work_mode = MOTOR_MODE_KNOB;
 static int music_note_index = 0;
 static uint32_t music_note_start_ms = 0;
 
+// Jump-game spring state. The FOC task writes it and the LVGL task reads it.
+static portMUX_TYPE jump_state_mux = portMUX_INITIALIZER_UNLOCKED;
+static float jump_charge_ratio = 0.0f;
+static float jump_release_ratio = 0.0f;
+static bool jump_release_pending = false;
+
+static const float JUMP_MAX_ANGLE_RAD = 100.0f * PI / 180.0f;
+static const float JUMP_MIN_RELEASE_RAD = 8.0f * PI / 180.0f;
+static const float JUMP_RELEASE_DROP_RAD = 3.0f * PI / 180.0f;
+static const float JUMP_SPRING_STRENGTH = 3.2f;
+static const float JUMP_SPRING_DAMPING = 0.08f;
+
 extern int current_os_mode;
 
 KnobConfig motor_config = {
@@ -433,6 +446,29 @@ float get_motor_shaft_angle(void)
     return motor.shaft_angle;
 }
 
+float get_jump_charge_percent(void)
+{
+    portENTER_CRITICAL(&jump_state_mux);
+    float percent = jump_charge_ratio * 100.0f;
+    portEXIT_CRITICAL(&jump_state_mux);
+    return percent;
+}
+
+bool consume_jump_release(float *charge_ratio)
+{
+    bool released;
+    portENTER_CRITICAL(&jump_state_mux);
+    released = jump_release_pending;
+    if (released)
+    {
+        if (charge_ratio != NULL)
+            *charge_ratio = jump_release_ratio;
+        jump_release_pending = false;
+    }
+    portEXIT_CRITICAL(&jump_state_mux);
+    return released;
+}
+
 void update_motor_status(MOTOR_RUNNING_MODE_E motor_status)
 {
     struct _knob_message *send_message;
@@ -485,6 +521,10 @@ void Task_foc(void *pvParameters)
     uint32_t last_idle_start = 0;
     float idle_check_velocity_ewma = 0;
     float damp_vel_ewma = 0; // 阻尼模式的滤波后测速
+    float jump_center = 0.0f;
+    float jump_peak_angle = 0.0f;
+    bool jump_fired = false;
+    uint32_t jump_centered_since = 0;
 
     auto reset_knob_tracking = [&]() {
         current_detent_center = motor.shaft_angle;
@@ -548,6 +588,19 @@ void Task_foc(void *pvParameters)
                     reboot_to_main_after_music();
                 }
                 break;
+            case JUMP_SPRING_START:
+                jump_center = motor.shaft_angle;
+                jump_peak_angle = 0.0f;
+                jump_fired = false;
+                jump_centered_since = 0;
+                motor_work_mode = MOTOR_MODE_JUMP;
+                portENTER_CRITICAL(&jump_state_mux);
+                jump_charge_ratio = 0.0f;
+                jump_release_ratio = 0.0f;
+                jump_release_pending = false;
+                portEXIT_CRITICAL(&jump_state_mux);
+                Serial.println("Jump mode: spring centered");
+                break;
             default:
                 break;
             }
@@ -559,13 +612,20 @@ void Task_foc(void *pvParameters)
             run_pc_mouse_logic(motor.shaft_angle, motor.shaft_velocity);
 
             static int touch_check_cnt = 0;
+            static bool pc_touch_ready = false;
             if (touch_check_cnt++ > 100)
             {
                 touch_check_cnt = 0;
-                if (touchRead(ESP32_TOUCH_PIN1) < 12)
+                const uint16_t touch_value = touchRead(ESP32_TOUCH_PIN1);
+
+                // Require a release after boot and after each switch, so a
+                // long touch cannot advance through several modes.
+                if (touch_value > 18)
+                    pc_touch_ready = true;
+                else if (touch_value < 12 && pc_touch_ready)
                 {
-                    current_os_mode = 0;
-                    ESP.restart();
+                    pc_touch_ready = false;
+                    next_pc_control_mode(motor.shaft_angle);
                 }
             }
         }
@@ -575,6 +635,54 @@ void Task_foc(void *pvParameters)
             {
                 reboot_to_main_after_music();
             }
+        }
+        else if (motor_work_mode == MOTOR_MODE_JUMP)
+        {
+            motor.loopFOC();
+
+            const float delta = motor.shaft_angle - jump_center;
+            const float abs_delta = fabsf(delta);
+            const float ratio = CLAMP(abs_delta / JUMP_MAX_ANGLE_RAD, 0.0f, 1.0f);
+
+            if (!jump_fired && abs_delta > jump_peak_angle)
+                jump_peak_angle = abs_delta;
+
+            // Moving clearly back towards the centre is treated as releasing the knob.
+            const bool moving_home = delta * motor.shaft_velocity < -0.04f;
+            if (!jump_fired && jump_peak_angle >= JUMP_MIN_RELEASE_RAD &&
+                jump_peak_angle - abs_delta >= JUMP_RELEASE_DROP_RAD && moving_home)
+            {
+                jump_fired = true;
+                const float released_ratio = CLAMP(jump_peak_angle / JUMP_MAX_ANGLE_RAD, 0.0f, 1.0f);
+                portENTER_CRITICAL(&jump_state_mux);
+                jump_release_ratio = released_ratio;
+                jump_release_pending = true;
+                portEXIT_CRITICAL(&jump_state_mux);
+            }
+
+            if (jump_fired && abs_delta < radians(3.0f))
+            {
+                if (jump_centered_since == 0)
+                    jump_centered_since = millis();
+                else if (millis() - jump_centered_since >= 100)
+                {
+                    jump_fired = false;
+                    jump_peak_angle = 0.0f;
+                    jump_center = motor.shaft_angle;
+                    jump_centered_since = 0;
+                }
+            }
+            else
+                jump_centered_since = 0;
+
+            portENTER_CRITICAL(&jump_state_mux);
+            jump_charge_ratio = ratio;
+            portEXIT_CRITICAL(&jump_state_mux);
+
+            float torque = -JUMP_SPRING_STRENGTH * delta - JUMP_SPRING_DAMPING * motor.shaft_velocity;
+            if (abs_delta > JUMP_MAX_ANGLE_RAD)
+                torque += -copysignf((abs_delta - JUMP_MAX_ANGLE_RAD) * 10.0f, delta);
+            motor.move(CLAMP(torque, -5.5f, 5.5f));
         }
         else
         {

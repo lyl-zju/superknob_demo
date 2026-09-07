@@ -28,6 +28,7 @@ LV_IMG_DECLARE(music_img);
 LV_IMG_DECLARE(about_img);
 LV_IMG_DECLARE(chip_img);
 LV_IMG_DECLARE(game_title_img);
+LV_IMG_DECLARE(jump_title_img);
 
 static void scroll_event_cb(lv_event_t *e)
 {
@@ -148,6 +149,53 @@ void lv_set_scroll_box_img(lv_obj_t* background_btn, void* icon_src, void* text_
     lv_obj_align(img2, LV_ALIGN_RIGHT_MID, -56, -5);
 }
 
+// Jump-game menu item: draw the platform and airborne piece in LVGL so no icon
+// bitmap is needed, while keeping the same layout as the other menu entries.
+static void lv_set_jump_scroll_box(lv_obj_t *background_btn)
+{
+    static lv_style_t style_btn;
+    lv_style_init(&style_btn);
+    lv_style_set_bg_opa(&style_btn, 0);
+    lv_style_set_radius(&style_btn, 15);
+
+    lv_obj_set_width(background_btn, lv_pct(100));
+    lv_obj_set_height(background_btn, lv_pct(40));
+    lv_obj_add_style(background_btn, &style_btn, LV_PART_MAIN);
+
+    lv_obj_t *divider = lv_line_create(background_btn);
+    static lv_point_t divider_points[] = {{70, 5}, {70, 70}};
+    lv_line_set_points(divider, divider_points, 2);
+
+    lv_obj_t *platform_left = lv_obj_create(background_btn);
+    lv_obj_set_pos(platform_left, 6, 53);
+    lv_obj_set_size(platform_left, 22, 9);
+    lv_obj_set_style_bg_color(platform_left, lv_color_hex(0x26A69A), 0);
+    lv_obj_set_style_border_width(platform_left, 0, 0);
+    lv_obj_set_style_radius(platform_left, 2, 0);
+
+    lv_obj_t *platform_right = lv_obj_create(background_btn);
+    lv_obj_set_pos(platform_right, 43, 43);
+    lv_obj_set_size(platform_right, 22, 9);
+    lv_obj_set_style_bg_color(platform_right, lv_color_hex(0x26A69A), 0);
+    lv_obj_set_style_border_width(platform_right, 0, 0);
+    lv_obj_set_style_radius(platform_right, 2, 0);
+
+    lv_obj_t *piece = lv_obj_create(background_btn);
+    lv_obj_set_pos(piece, 31, 19);
+    lv_obj_set_size(piece, 12, 12);
+    lv_obj_set_style_bg_color(piece, lv_color_hex(0xFFB300), 0);
+    lv_obj_set_style_border_width(piece, 0, 0);
+    lv_obj_set_style_radius(piece, 3, 0);
+
+    lv_obj_t *underline = lv_line_create(background_btn);
+    static lv_point_t underline_points[] = {{80, 40}, {180, 40}};
+    lv_line_set_points(underline, underline_points, 2);
+
+    lv_obj_t *title = lv_img_create(background_btn);
+    lv_img_set_src(title, &jump_title_img);
+    lv_obj_set_pos(title, 82, 14);
+}
+
 static void lamp_btn_event_handler(lv_event_t * e)
 {
     lv_event_code_t code = lv_event_get_code(e);
@@ -266,6 +314,16 @@ static void game_btn_event_handler(lv_event_t * e)
     }
 }
 
+static void jump_btn_event_handler(lv_event_t *e)
+{
+    if (lv_event_get_code(e) == LV_EVENT_CLICKED)
+    {
+        set_super_knob_page_status(SUPER_PAGE_BUSY);
+        setup_scr_screen_jump(&super_knob_ui);
+        lv_scr_load_anim(super_knob_ui.screen_jump, LV_SCR_LOAD_ANIM_FADE_ON, 200, 100, true);
+    }
+}
+
 static void sensor_leds_event_handler(lv_event_t * e)
 {
     lv_event_code_t code = lv_event_get_code(e);
@@ -347,6 +405,10 @@ void setup_scr_screen_iot_main(lv_ui *ui)
     lv_obj_t* game_btn = lv_btn_create(ui->screen_iot_main);
     lv_obj_add_event_cb(game_btn, game_btn_event_handler, LV_EVENT_ALL, NULL);
     lv_set_scroll_box_img(game_btn, (void *)&chip_img, (void *)&game_title_img);
+
+    lv_obj_t *jump_btn = lv_btn_create(ui->screen_iot_main);
+    lv_obj_add_event_cb(jump_btn, jump_btn_event_handler, LV_EVENT_ALL, NULL);
+    lv_set_jump_scroll_box(jump_btn);
 
     // lv_obj_t* socket_btn = lv_btn_create(ui->screen_iot_main);
     // lv_set_scroll_box(socket_btn, (void *)&socket_img, "插座");

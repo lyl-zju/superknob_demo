@@ -15,8 +15,6 @@ int last_tab_idx = 0;
 bool is_alt_pressed = false;
 int mouse_click_state = 0;  
 
-int shake_state = 0; 
-unsigned long shake_timer = 0;
 bool is_pc_mode_active = false;
 
 // 在 bluetooth.cpp 中新增一个开机初始化函数
@@ -51,34 +49,6 @@ void exit_pc_control(void) {
 
 // 传入 SimpleFOC 算好的角度和速度
 void run_pc_mouse_logic(float raw_angle, float velocity) {
-    unsigned long now = millis();
-    
-    // ================= 1. 手势检测：摇一摇 =================
-    // 直接用 SimpleFOC 算好的 velocity，更精准平滑
-    if (velocity > 14.0f && shake_state == 0) {
-        shake_state = 1;         
-        shake_timer = now;
-    } else if (velocity < -14.0f && shake_state == 1 && (now - shake_timer < 400)) {
-        // 摇一摇成功，切换模式
-        current_pc_mode = (current_pc_mode + 1) % 4; 
-        
-        pc_enc_zero = raw_angle; // 重置该模式的零点
-        last_scroll_idx = 0;
-        last_vol_idx = 0;
-        if (is_alt_pressed) { Keyboard.releaseAll(); is_alt_pressed = false; }
-        Mouse.release(MOUSE_LEFT);
-        Mouse.release(MOUSE_RIGHT);
-        mouse_click_state = 0;
-        
-        Serial.print("摇一摇成功！当前模式: ");
-        Serial.println(current_pc_mode);
-        // 这里你可以加一个 motor_shake(2,2) 来做震动反馈
-        
-        shake_state = 0; 
-    }
-    
-    if (now - shake_timer > 400) shake_state = 0; 
-
     // ================= 2. 四模态触感引擎 =================
         float angle = raw_angle - pc_enc_zero; 
         float error = angle; // 目标都在 0 位置
@@ -172,4 +142,25 @@ void run_pc_mouse_logic(float raw_angle, float velocity) {
         // 添加微分阻尼项
         // torque += -Kd * derivative;
     motor.move(torque);
+}
+
+void next_pc_control_mode(float current_angle)
+{
+    current_pc_mode = (current_pc_mode + 1) % 4;
+    pc_enc_zero = current_angle;
+    last_scroll_idx = 0;
+    last_vol_idx = 0;
+    last_tab_idx = 0;
+
+    // Release anything that may still be held when changing modes.
+    if (is_alt_pressed) {
+        Keyboard.releaseAll();
+        is_alt_pressed = false;
+    }
+    Mouse.release(MOUSE_LEFT);
+    Mouse.release(MOUSE_RIGHT);
+    mouse_click_state = 0;
+
+    Serial.print("GPIO0 touched, PC control mode: ");
+    Serial.println(current_pc_mode);
 }

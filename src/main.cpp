@@ -45,17 +45,18 @@ void setup()
     //ws2812_rcv_Queue = xQueueCreate(10, sizeof(_ws2812_message *));
     //iot_control_Queue = xQueueCreate(10, sizeof(_ws2812_message *));
 
-    // 2. 核心逻辑：智能判断是否需要清零
-    // 检查复位原因。如果是刚插上电源 (冷启动)
-    if (esp_reset_reason() == ESP_RST_POWERON) {
-        current_os_mode = 0; // 只有在彻底断电重新上电时，才强制回到主菜单
-        Serial.println("Power-On Reset: Starting fresh at System A.");
+    // A software restart is used to enter PC mode. All hardware reset causes
+    // (including the reboot button) return to the main UI.
+    const esp_reset_reason_t reset_reason = esp_reset_reason();
+    if (reset_reason != ESP_RST_SW) {
+        current_os_mode = 0;
+        Serial.println("Hardware reset: Starting at the main UI.");
     }
     else {
-        // 其他复位原因（软件重启、看门狗等）不修改 current_os_mode 的值，保持它的“记忆”状态
+        // Preserve the mode requested immediately before ESP.restart().
         Serial.print("Reset reason: ");
-        Serial.println(esp_reset_reason());
-        Serial.println("Not a Power-On Reset: Retaining previous OS mode.");
+        Serial.println(reset_reason);
+        Serial.println("Software reset: Retaining requested OS mode.");
     }
     // 安全兜底：如果内存里的值因为意外变成了乱码，强制纠正为 0
     if (current_os_mode != 0 && current_os_mode != 1) {
@@ -80,7 +81,7 @@ void setup()
         tft.setTextColor(TFT_WHITE); tft.setTextSize(3);
         tft.setCursor(50, 140); tft.println("PC MODE");
         tft.setTextSize(2); tft.setTextColor(TFT_DARKGREY);
-        tft.setCursor(30, 200); tft.println("Touch to Exit");
+        tft.setCursor(20, 200); tft.println("Touch: Next Mode");
 
         // 2. 独享海量完整内存，启动蓝牙！绝对不会崩溃！
         init_pc_control();
