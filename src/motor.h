@@ -26,8 +26,11 @@ struct KnobConfig {
     float endstop_strength_unit;  
     //中断点 
     float snap_point; 
-    //描述符            
-    char descriptor[50];          
+    //描述符
+    char descriptor[50];
+    // 阻尼强度：>0 进入纯粘性阻尼模式（反向力矩 = -阻尼强度 * 角速度），
+    // 转动时有阻力、松手停住不回弹；=0 走原来的档位模式。
+    float damping_strength;
 };
 extern KnobConfig motor_config;
 
@@ -43,5 +46,6 @@ typedef enum
 } MOTOR_RUNNING_MODE_E;
 
 int get_motor_position(void);
+float get_motor_shaft_angle(void);
 void update_motor_config(int status);
 void Task_foc(void *pvParameters);

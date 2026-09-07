@@ -26,6 +26,8 @@ LV_IMG_DECLARE(fan_img);
 LV_IMG_DECLARE(tomato_img);
 LV_IMG_DECLARE(music_img);
 LV_IMG_DECLARE(about_img);
+LV_IMG_DECLARE(chip_img);
+LV_IMG_DECLARE(game_title_img);
 
 static void scroll_event_cb(lv_event_t *e)
 {
@@ -113,6 +115,37 @@ void lv_set_scroll_box(lv_obj_t* background_btn, void* image_src, const char * t
     lv_obj_add_style(label, &style_text, 0);
     lv_obj_align(label, LV_ALIGN_RIGHT_MID, 50, -5);
 
+}
+
+// 与 lv_set_scroll_box 相同，但右侧用图片代替文字（字库缺“游戏”等字时用）
+void lv_set_scroll_box_img(lv_obj_t* background_btn, void* icon_src, void* text_img_src)
+{
+    static lv_style_t style_btn;
+    lv_style_init(&style_btn);
+    lv_style_set_bg_opa(&style_btn, 0);
+    lv_style_set_radius(&style_btn, 15);
+
+    lv_obj_set_width(background_btn, lv_pct(100));
+    lv_obj_set_height(background_btn, lv_pct(40));
+    lv_obj_add_style(background_btn, &style_btn, LV_PART_MAIN);
+
+    lv_obj_t* line1 = lv_line_create(background_btn);
+    static lv_point_t line_points[] = { {70, 5}, {70, 70} };
+    lv_line_set_points(line1, line_points, 2);
+
+    lv_obj_t *img1 = lv_img_create(background_btn);
+    lv_img_set_src(img1, icon_src);
+    lv_obj_align(img1, LV_ALIGN_LEFT_MID, 0, 0);
+
+    lv_obj_t* line2 = lv_line_create(background_btn);
+    static lv_point_t line_points_2[] = { {80, 40}, {180, 40} };
+    lv_line_set_points(line2, line_points_2, 2);
+
+    // 原文字 label 宽 150、RIGHT_MID 偏移 +50、文字左对齐，故文字左边缘距按钮右边缘 100px。
+    // 让图片左边缘对齐到同一位置（图片宽 44），偏移 = 50 - 150 + 44 = -56。
+    lv_obj_t *img2 = lv_img_create(background_btn);
+    lv_img_set_src(img2, text_img_src);
+    lv_obj_align(img2, LV_ALIGN_RIGHT_MID, -56, -5);
 }
 
 static void lamp_btn_event_handler(lv_event_t * e)
@@ -218,6 +251,21 @@ static void music_btn_event_handler(lv_event_t * e)
     }
 }
 
+static void game_btn_event_handler(lv_event_t * e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+
+    if(code == LV_EVENT_CLICKED) {
+        set_super_knob_page_status(SUPER_PAGE_BUSY);
+        setup_scr_screen_game(&super_knob_ui);
+        lv_scr_load_anim(super_knob_ui.screen_game, LV_SCR_LOAD_ANIM_FADE_ON, 200, 100, true);
+        // 手感切换放在 game_page 里：选项菜单=主界面同款档位，游戏中=无阻尼
+    }
+    else if(code == LV_EVENT_VALUE_CHANGED) {
+        //LV_LOG_USER("Toggled");
+    }
+}
+
 static void sensor_leds_event_handler(lv_event_t * e)
 {
     lv_event_code_t code = lv_event_get_code(e);
@@ -295,6 +343,10 @@ void setup_scr_screen_iot_main(lv_ui *ui)
     lv_obj_t* music_btn = lv_btn_create(ui->screen_iot_main);
     lv_obj_add_event_cb(music_btn, music_btn_event_handler, LV_EVENT_ALL, NULL);
     lv_set_scroll_box(music_btn, (void *)&music_img, "音乐");
+
+    lv_obj_t* game_btn = lv_btn_create(ui->screen_iot_main);
+    lv_obj_add_event_cb(game_btn, game_btn_event_handler, LV_EVENT_ALL, NULL);
+    lv_set_scroll_box_img(game_btn, (void *)&chip_img, (void *)&game_title_img);
 
     // lv_obj_t* socket_btn = lv_btn_create(ui->screen_iot_main);
     // lv_set_scroll_box(socket_btn, (void *)&socket_img, "插座");

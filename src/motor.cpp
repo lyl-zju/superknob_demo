@@ -25,6 +25,7 @@ static KnobConfig super_knob_configs[] = {
     {256, 127, 1 * PI / 180, 1, 1, 1.1, "Fine values\nWith detents"},
     {256, 127, 1 * PI / 180, 0, 1, 1.1, "Fine values\nNo detents"},
     {2, 0, 60 * PI / 180, 1, 1, 0.55, "On/off\nStrong detent"},
+    {0, 0, 0, 0, 0, 1, "Damping\nViscous, no return", 0.6f},
 };
 
 static const float DEAD_ZONE_DETENT_PERCENT = 0.2;
@@ -34,6 +35,8 @@ static const float IDLE_VELOCITY_RAD_PER_SEC = 0.05;
 static const uint32_t IDLE_CORRECTION_DELAY_MILLIS = 500;
 static const float IDLE_CORRECTION_MAX_ANGLE_RAD = 5 * PI / 180;
 static const float IDLE_CORRECTION_RATE_ALPHA = 0.0005;
+static const float DAMP_VELOCITY_DEAD_ZONE = 0.15f; // 阻尼死区(rad/s)，低于此速度输出 0
+static const float DAMP_VELOCITY_FILTER_ALPHA = 0.05f; // 阻尼测速低通系数（~20ms 时间常数），磨平 12 位传感器的量化尖峰
 
 static const int MOTOR_PWM_A_PIN = 32;
 static const int MOTOR_PWM_B_PIN = 33;
@@ -425,6 +428,11 @@ int get_motor_position(void)
     return motor_config.position;
 }
 
+float get_motor_shaft_angle(void)
+{
+    return motor.shaft_angle;
+}
+
 void update_motor_status(MOTOR_RUNNING_MODE_E motor_status)
 {
     struct _knob_message *send_message;
@@ -476,11 +484,13 @@ void Task_foc(void *pvParameters)
     float current_detent_center = 0;
     uint32_t last_idle_start = 0;
     float idle_check_velocity_ewma = 0;
+    float damp_vel_ewma = 0; // 阻尼模式的滤波后测速
 
     auto reset_knob_tracking = [&]() {
         current_detent_center = motor.shaft_angle;
         last_idle_start = 0;
         idle_check_velocity_ewma = 0;
+        damp_vel_ewma = 0;
     };
 
     auto apply_detent_settings = [&]() {
@@ -514,6 +524,7 @@ void Task_foc(void *pvParameters)
                 }
 
                 current_detent_center = motor.shaft_angle;
+                damp_vel_ewma = 0;
 
                 apply_detent_settings();
 
@@ -568,6 +579,26 @@ void Task_foc(void *pvParameters)
         else
         {
             motor.loopFOC();
+
+            if (motor_config.damping_strength > 0.0f)
+            {
+                // 纯粘性阻尼：反向力矩 ∝ 角速度。转动时越转越快阻力越大（像弹簧），
+                // 但没有回中力，松手后停在哪就停在哪，不会一直转回初始位置。
+                // 传感器 12 位差分测速有量化噪声（1 LSB ≈ 1.5 rad/s 尖峰），直接反馈
+                // 会把噪声放大成持续抖动/机械噪音：先低通滤波磨平，再进死区彻底消除静止抖动。
+                damp_vel_ewma = damp_vel_ewma * (1.0f - DAMP_VELOCITY_FILTER_ALPHA)
+                                + motor.shaft_velocity * DAMP_VELOCITY_FILTER_ALPHA;
+                float torque = 0.0f;
+                if (fabsf(damp_vel_ewma) > DAMP_VELOCITY_DEAD_ZONE)
+                {
+                    torque = -motor_config.damping_strength * damp_vel_ewma;
+                    torque = CLAMP(torque, -3.0f, 3.0f);
+                }
+                motor.move(torque);
+                vTaskDelay(1);
+                continue;
+            }
+
             idle_check_velocity_ewma = motor.shaft_velocity * IDLE_VELOCITY_EWMA_ALPHA + idle_check_velocity_ewma * (1 - IDLE_VELOCITY_EWMA_ALPHA);
             if (fabsf(idle_check_velocity_ewma) > IDLE_VELOCITY_RAD_PER_SEC)
             {
