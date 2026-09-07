@@ -27,6 +27,7 @@ TaskHandle_t controllerTaskHandle = nullptr;
 portMUX_TYPE stateMux = portMUX_INITIALIZER_UNLOCKED;
 FanControllerSnapshot snapshot;
 volatile int pendingSpeed = -1;
+volatile int pendingPower = -1;
 volatile int pendingTurnSteps = 0;
 
 bool localConfigLooksValid()
@@ -122,11 +123,33 @@ void controllerTask(void *)
         }
 
         int requestedSpeed = -1;
+        int requestedPower = -1;
         int requestedTurns = 0;
         portENTER_CRITICAL(&stateMux);
         requestedSpeed = pendingSpeed;
+        requestedPower = pendingPower;
         requestedTurns = pendingTurnSteps;
         portEXIT_CRITICAL(&stateMux);
+
+        if (requestedPower >= 0) {
+            portENTER_CRITICAL(&stateMux);
+            requestedPower = pendingPower;
+            pendingPower = -1;
+            portEXIT_CRITICAL(&stateMux);
+            MiioResult result = fan.setPower(requestedPower != 0);
+            if (result.ok()) {
+                portENTER_CRITICAL(&stateMux);
+                snapshot.power = requestedPower != 0;
+                snapshot.stateValid = true;
+                snapshot.status = FanConnectionStatus::Online;
+                snapshot.lastError = 0;
+                portEXIT_CRITICAL(&stateMux);
+                Serial.printf("[fan] power applied=%d\n", requestedPower);
+            } else {
+                setStatus(FanConnectionStatus::Error, result.error);
+                transport.resetSession();
+            }
+        }
 
         if (requestedSpeed >= 1 && now - lastSpeedRequestAt >= kSpeedCoalesceMs) {
             portENTER_CRITICAL(&stateMux);
@@ -171,6 +194,14 @@ void fan_controller_request_speed(uint8_t speed)
     speed = constrain(speed, 1, 100);
     portENTER_CRITICAL(&stateMux);
     pendingSpeed = speed;
+    portEXIT_CRITICAL(&stateMux);
+    if (controllerTaskHandle != nullptr) xTaskNotifyGive(controllerTaskHandle);
+}
+
+void fan_controller_request_power(bool power)
+{
+    portENTER_CRITICAL(&stateMux);
+    pendingPower = power ? 1 : 0;
     portEXIT_CRITICAL(&stateMux);
     if (controllerTaskHandle != nullptr) xTaskNotifyGive(controllerTaskHandle);
 }

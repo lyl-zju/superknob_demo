@@ -18,6 +18,7 @@ struct FanControllerSnapshot {
 };
 
 void fan_controller_begin();
+void fan_controller_request_power(bool power);
 void fan_controller_request_speed(uint8_t speed);
 void fan_controller_request_turn_steps(int8_t steps);
 void fan_controller_cancel_turns();

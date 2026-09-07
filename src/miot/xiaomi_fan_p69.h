@@ -15,6 +15,7 @@ public:
     explicit XiaomiFanP69(MiioTransport &transport);
 
     MiioResult readState(XiaomiFanP69State &state);
+    MiioResult setPower(bool power);
     MiioResult setSpeed(uint8_t speed);
     MiioResult turnLeft();
     MiioResult turnRight();

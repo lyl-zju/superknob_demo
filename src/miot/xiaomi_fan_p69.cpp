@@ -81,6 +81,16 @@ MiioResult XiaomiFanP69::setSpeed(uint8_t speed)
     return result;
 }
 
+MiioResult XiaomiFanP69::setPower(bool power)
+{
+    String params = F("[{\"did\":\"set.2.1\",\"siid\":2,\"piid\":1,\"value\":");
+    params += power ? F("true") : F("false");
+    params += F("}]");
+    MiioResult result = transport_.request(F("set_properties"), params);
+    if (result.ok() && !responseSucceeded(result.payload)) result.error = MiioError::DeviceError;
+    return result;
+}
+
 MiioResult XiaomiFanP69::turnLeft()
 {
     MiioResult result = transport_.request(
