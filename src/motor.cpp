@@ -21,12 +21,15 @@ enum MotorWorkMode {
 };
 
 static KnobConfig super_knob_configs[] = {
-    {0, 0, 10 * PI / 180, 0, 1, 1.1, "Unbounded\nNo detents"},
-    {0, 0, 8.225806452 * PI / 180, 2.3, 0, 1.1, "Continuous dense\nStrong detents"},
-    {256, 127, 1 * PI / 180, 1, 1, 1.1, "Fine values\nWith detents"},
-    {256, 127, 1 * PI / 180, 0, 1, 1.1, "Fine values\nNo detents"},
-    {2, 0, 60 * PI / 180, 1, 1, 0.55, "On/off\nStrong detent"},
+    {0, 0, 10 * PI / 180, 0, 1, 1.1, "Unbounded\nNo detents", 0.0f},
+    {0, 0, 8.225806452 * PI / 180, 2.3, 0, 1.1, "Continuous dense\nStrong detents", 0.0f},
+    {256, 127, 1 * PI / 180, 1, 1, 1.1, "Fine values\nWith detents", 0.0f},
+    {256, 127, 1 * PI / 180, 0, 1, 1.1, "Fine values\nNo detents", 0.0f},
+    {2, 0, 60 * PI / 180, 1, 1, 0.55, "On/off\nStrong detent", 0.0f},
     {0, 0, 0, 0, 0, 1, "Damping\nViscous, no return", 0.6f},
+    // Keep the proven stable physical pitch. Fan pages apply their 2x input
+    // sensitivity in software instead of narrowing the closed-loop detents.
+    {0, 0, 8.225806452 * PI / 180, 2.3, 0, 1.1, "Fan detail\nSoftware 2x", 0.0f},
 };
 
 static const float DEAD_ZONE_DETENT_PERCENT = 0.2;

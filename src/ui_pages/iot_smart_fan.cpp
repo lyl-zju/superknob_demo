@@ -6,9 +6,8 @@
 
 #include "fan_controller.h"
 
-LV_FONT_DECLARE(lv_font_chinese_source_20);
-LV_FONT_DECLARE(lv_font_super_knob_30);
-LV_FONT_DECLARE(lv_font_simsun_16_cjk);
+LV_FONT_DECLARE(lv_font_fan_20);
+LV_FONT_DECLARE(lv_font_fan_digits_30);
 
 namespace {
 
@@ -19,8 +18,6 @@ constexpr uint32_t AMBER = 0xFFB703, MUTED = 0x86A7B6;
 uint8_t displayedSpeed = 1;
 int16_t pendingDirectionSteps = 0;
 bool speedAdjusted = false, powerPending = false, powerTarget = false;
-lv_font_t fanUiFont;
-bool fanUiFontReady = false;
 lv_obj_t *powerButton = nullptr, *powerLabel = nullptr;
 lv_obj_t *speedMeter = nullptr, *directionArc = nullptr;
 lv_meter_indicator_t *speedNeedle = nullptr, *speedArc = nullptr;
@@ -29,12 +26,8 @@ void updateSpeedDisplay();
 
 const lv_font_t *uiFont()
 {
-    if (!fanUiFontReady) {
-        fanUiFont = lv_font_chinese_source_20;
-        fanUiFont.fallback = &lv_font_simsun_16_cjk;
-        fanUiFontReady = true;
-    }
-    return &fanUiFont;
+    // Project-owned font generated from SimHei with every fan UI glyph.
+    return &lv_font_fan_20;
 }
 
 void styleScreen(lv_obj_t *screen)
@@ -95,7 +88,7 @@ void loadFanMenu()
     set_super_knob_page_status(SUPER_PAGE_BUSY);
     setup_scr_screen_smart_fan(&super_knob_ui);
     lv_scr_load_anim(super_knob_ui.screen_iot_smart_fan, LV_SCR_LOAD_ANIM_FADE_ON, 150, 0, true);
-    update_motor_config(1);
+    update_motor_config(KNOB_CONFIG_FAN_DETAIL);
     update_page_status(CHECKOUT_PAGE);
 }
 
@@ -115,7 +108,11 @@ void speedButtonEvent(lv_event_t *event)
     set_super_knob_page_status(SUPER_PAGE_BUSY);
     setup_scr_screen_fan_speed(&super_knob_ui);
     lv_scr_load_anim(super_knob_ui.screen_iot_fan_speed, LV_SCR_LOAD_ANIM_FADE_ON, 150, 0, true);
-    update_motor_config(2);
+    // Config 1 has infinitely many detents (num_positions == 0), so it feels
+    // like a gear but never reaches a physical end stop.  Notify the motor task
+    // as well: assigning motor_config alone does not refresh PID D/center state.
+    update_motor_config(KNOB_CONFIG_FAN_DETAIL);
+    update_page_status(CHECKOUT_PAGE);
 }
 
 void directionButtonEvent(lv_event_t *event)
@@ -124,7 +121,8 @@ void directionButtonEvent(lv_event_t *event)
     set_super_knob_page_status(SUPER_PAGE_BUSY);
     setup_scr_screen_fan_direction(&super_knob_ui);
     lv_scr_load_anim(super_knob_ui.screen_iot_fan_direction, LV_SCR_LOAD_ANIM_FADE_ON, 150, 0, true);
-    update_motor_config(2);
+    update_motor_config(1);
+    update_page_status(CHECKOUT_PAGE);
 }
 
 void backButtonEvent(lv_event_t *event)
@@ -232,19 +230,20 @@ void setup_scr_screen_fan_speed(lv_ui *ui)
     lv_meter_set_indicator_start_value(speedMeter, speedArc, 1);
     speedNeedle = lv_meter_add_needle_line(speedMeter, scale, 4, lv_color_hex(AMBER), -24);
 
-    lv_obj_t *title = lv_label_create(ui->screen_iot_fan_speed);
-    lv_obj_set_style_text_font(title, uiFont(), 0);
-    lv_obj_set_style_text_color(title, lv_color_white(), 0);
-    lv_label_set_text(title, "风速");
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 12);
     ui->screen_iot_fan_status_label = lv_label_create(ui->screen_iot_fan_speed);
     lv_obj_set_style_text_font(ui->screen_iot_fan_status_label, LV_FONT_DEFAULT, 0);
     setConnectionLabel(ui->screen_iot_fan_status_label, state);
     lv_obj_align(ui->screen_iot_fan_status_label, LV_ALIGN_TOP_MID, 0, 37);
     ui->screen_iot_fan_value_label = lv_label_create(ui->screen_iot_fan_speed);
-    lv_obj_set_style_text_font(ui->screen_iot_fan_value_label, &lv_font_super_knob_30, 0);
+    lv_obj_set_style_text_font(ui->screen_iot_fan_value_label, &lv_font_fan_digits_30, 0);
     lv_obj_set_style_text_color(ui->screen_iot_fan_value_label, lv_color_hex(CYAN), 0);
     lv_obj_align(ui->screen_iot_fan_value_label, LV_ALIGN_CENTER, 0, 19);
+    // Keep Chinese separate from the number-only 30 px font used below.
+    lv_obj_t *speedCaption = lv_label_create(ui->screen_iot_fan_speed);
+    lv_obj_set_style_text_font(speedCaption, uiFont(), 0);
+    lv_obj_set_style_text_color(speedCaption, lv_color_white(), 0);
+    lv_label_set_text(speedCaption, "风速");
+    lv_obj_align(speedCaption, LV_ALIGN_CENTER, 0, -15);
     updateSpeedDisplay();
     lv_timer_create(speedStatusTimer, 400, nullptr);
     set_super_knob_page_status(IOT_FAN_SPEED_PAGE);
@@ -272,20 +271,23 @@ void setup_scr_screen_fan_direction(lv_ui *ui)
     lv_label_set_text(title, "左右转动");
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 13);
     lv_obj_t *left = lv_label_create(ui->screen_iot_fan_direction);
+    lv_obj_set_style_text_font(left, LV_FONT_DEFAULT, 0);
     lv_obj_set_style_text_color(left, lv_color_hex(MUTED), 0);
-    lv_label_set_text(left, LV_SYMBOL_LEFT "  L");
+    lv_label_set_text(left, "<  L");
     lv_obj_align(left, LV_ALIGN_LEFT_MID, 27, 41);
     lv_obj_t *right = lv_label_create(ui->screen_iot_fan_direction);
+    lv_obj_set_style_text_font(right, LV_FONT_DEFAULT, 0);
     lv_obj_set_style_text_color(right, lv_color_hex(MUTED), 0);
-    lv_label_set_text(right, "R  " LV_SYMBOL_RIGHT);
+    lv_label_set_text(right, "R  >");
     lv_obj_align(right, LV_ALIGN_RIGHT_MID, -27, 41);
     ui->screen_iot_fan_value_label = lv_label_create(ui->screen_iot_fan_direction);
+    lv_obj_set_style_text_font(ui->screen_iot_fan_value_label, LV_FONT_DEFAULT, 0);
     lv_obj_set_style_text_color(ui->screen_iot_fan_value_label, lv_color_hex(AMBER), 0);
     lv_obj_align(ui->screen_iot_fan_value_label, LV_ALIGN_CENTER, 0, 8);
     lv_obj_t *hint = lv_label_create(ui->screen_iot_fan_direction);
     lv_obj_set_style_text_font(hint, uiFont(), 0);
     lv_obj_set_style_text_color(hint, lv_color_hex(MUTED), 0);
-    lv_label_set_text(hint, "预览 · 轻触返回");
+    lv_label_set_text(hint, "轻触返回");
     lv_obj_align(hint, LV_ALIGN_BOTTOM_MID, 0, -23);
     updateDirectionDisplay();
     set_super_knob_page_status(IOT_FAN_DIRECTION_PAGE);
@@ -294,16 +296,19 @@ void setup_scr_screen_fan_direction(lv_ui *ui)
 void smart_fan_handle_encoder_delta(int16_t delta)
 {
     if (delta == 0) return;
+    // Haptic pitch remains stable; only the logical value changes twice per
+    // physical detent. This avoids increasing sensor-noise gain in motor PID.
+    const int16_t logicalDelta = constrain(static_cast<int32_t>(delta) * 2, -16, 16);
     const SUPER_KNOB_PAGE_NUM page = get_super_knob_page_status();
     if (page == IOT_FAN_SPEED_PAGE) {
         speedAdjusted = true;
-        displayedSpeed = constrain(static_cast<int>(displayedSpeed) + delta, 1, 100);
+        displayedSpeed = constrain(static_cast<int>(displayedSpeed) + logicalDelta, 1, 100);
         updateSpeedDisplay();
         fan_controller_request_speed(displayedSpeed);
     } else if (page == IOT_FAN_DIRECTION_PAGE) {
-        pendingDirectionSteps = constrain(pendingDirectionSteps + delta, -120, 120);
+        pendingDirectionSteps = constrain(pendingDirectionSteps + logicalDelta, -120, 120);
         updateDirectionDisplay();
-        // Deliberately no network action before real-device calibration.
+        fan_controller_request_turn_steps(logicalDelta);
     }
 }
 

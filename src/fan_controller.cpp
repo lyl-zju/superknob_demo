@@ -172,10 +172,26 @@ void controllerTask(void *)
             }
         }
 
-        // Direction commands are intentionally not consumed until physical step
-        // size and a safe interval have been measured on the real fan.
-        (void)requestedTurns;
-        (void)lastDirectionAt;
+        if (requestedTurns != 0 && now - lastDirectionAt >= kDirectionIntervalMs) {
+            const int direction = requestedTurns < 0 ? -1 : 1;
+            // Remove exactly one queued step before sending.  On failure the
+            // remaining queue is cancelled so reconnecting cannot replay stale
+            // physical movement.
+            portENTER_CRITICAL(&stateMux);
+            pendingTurnSteps -= direction;
+            portEXIT_CRITICAL(&stateMux);
+
+            MiioResult result = direction < 0 ? fan.turnLeft() : fan.turnRight();
+            lastDirectionAt = millis();
+            if (result.ok()) {
+                Serial.printf("[fan] direction applied=%s\n", direction < 0 ? "left" : "right");
+            } else {
+                fan_controller_cancel_turns();
+                setStatus(FanConnectionStatus::Error, result.error);
+                transport.resetSession();
+                transportReady = false;
+            }
+        }
 
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(50));
     }

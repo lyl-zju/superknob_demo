@@ -21,5 +21,12 @@
 token-output*.txt
 token_extractor.exe
 
+# Optional host-side Python tools used for token extraction/diagnostics
+/.venv/
+**/__pycache__/
+*.py[cod]
+token-output*.txt
+token_extractor.exe
+
 # Local network/device credentials
 /include/secrets.h

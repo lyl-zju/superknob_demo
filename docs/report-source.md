@@ -51,7 +51,7 @@
 1. 在路由器中查到风扇 IP，并为它设置 DHCP 地址保留。
 2. 用 Windows 版 Xiaomi Cloud Tokens Extractor 或其 Python 版本取得设备 token；token 属于设备凭据，不应提交到 Git。
    - https://github.com/PiotrMachowski/Xiaomi-cloud-tokens-extractor
-3. 用 python-miio 核实 model 是 `xiaomi.fan.p70`，读取属性，然后分别测试风速、摆风、摆角与左右点动。
+3. 用 python-miio 核实 model 是 `xiaomi.fan.p69`，读取属性，然后分别测试风速、摆风、摆角与左右点动。
 4. 测试通过后，将相同协议的最小实现移植到 ESP32。完成后电脑可以关机，ESP32 和风扇在同一局域网即可。
 
 ESP32 本身具备所需的 UDP、AES 和 MD5 能力；ESP-IDF 内置 Mbed TLS 并支持 AES。

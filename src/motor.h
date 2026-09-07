@@ -34,6 +34,9 @@ struct KnobConfig {
 };
 extern KnobConfig motor_config;
 
+// Index of the fan detail-page haptic profile in super_knob_configs.
+constexpr int KNOB_CONFIG_FAN_DETAIL = 6;
+
 typedef enum
 {
     MOTOR_INIT,
