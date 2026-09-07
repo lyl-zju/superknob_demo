@@ -43,24 +43,20 @@ void my_disp_flush(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *color
 
 static bool touch_pad_press(int gpio)
 {
-    static int press_cnt = 0;
-    bool ret_cnt = false;
-    Serial.println(touchRead(gpio));
-    if(touchRead(gpio) < 30){
-        
-        press_cnt ++;
-        //10ms 消抖
-        if (press_cnt > 4) {
-            if( touchRead(gpio) < 30){
-                ret_cnt = true;
-                press_cnt = -8;
-            }
-        }
-    }else{
+    static uint8_t press_cnt = 0;
+    static bool press_latched = false;
+    const bool touched = touchRead(gpio) < 30;
+    if (!touched) {
         press_cnt = 0;
+        press_latched = false;
+        return false;
     }
-    
-    return ret_cnt;
+    if (press_cnt < 5) ++press_cnt;
+    if (press_cnt >= 4 && !press_latched) {
+        press_latched = true;
+        return true;
+    }
+    return false;
 }
 
 
@@ -73,8 +69,9 @@ static void return_to_iot_main_page(void)
     update_motor_config(1);
 }
 
-void page_status_check(void)
+void page_status_check(bool touch_pressed)
 {
+    if (!touch_pressed) return;
     SUPER_KNOB_PAGE_NUM now_page = get_super_knob_page_status();
     switch (now_page)
     {
@@ -94,27 +91,22 @@ void page_status_check(void)
     //     break;
     case IOT_SENSOR_PAGE:
     case IOT_POINTER_PAGE:
-        if(touch_pad_press(ESP32_TOUCH_PIN1)){
-            setup_scr_screen_iot_main(&super_knob_ui);
-            lv_scr_load_anim(super_knob_ui.screen_iot_main_boday, LV_SCR_LOAD_ANIM_FADE_ON, 100, 10, false);
-            set_super_knob_page_status(SUPER_PAGE_BUSY);
-            update_motor_config(1);
-            update_page_status(CHECKOUT_PAGE);
-        }
+        setup_scr_screen_iot_main(&super_knob_ui);
+        lv_scr_load_anim(super_knob_ui.screen_iot_main_boday, LV_SCR_LOAD_ANIM_FADE_ON, 100, 10, false);
+        set_super_knob_page_status(SUPER_PAGE_BUSY);
+        update_motor_config(1);
+        update_page_status(CHECKOUT_PAGE);
         break;
     case IOT_MUSIC_PAGE:
-        if(touch_pad_press(ESP32_TOUCH_PIN1)){
-            update_page_status(MUSIC_STOP);
-        }
+        update_page_status(MUSIC_STOP);
         break;
     case IOT_COMPUTER_PAGE: 
-        if(touch_pad_press(ESP32_TOUCH_PIN1)){
-            // 【激进操作】：因为我们把 LVGL 画板砸了，没法正常退回去了。
-            // 最干净利落的方法：直接重启单片机！
-            // ESP32 重启非常快，大概 1-2 秒就能看到主菜单，就当是退出动画了。
-            Serial.println("Rebooting to exit PC mode...");
-            ESP.restart(); 
-        }
+        Serial.println("Rebooting to exit PC mode...");
+        ESP.restart();
+        break;
+    case IOT_FAN_SPEED_PAGE:
+    case IOT_FAN_DIRECTION_PAGE:
+        smart_fan_return_to_menu();
         break;
     default:
         break;
@@ -125,7 +117,6 @@ void page_status_check(void)
 /*Will be called by the library to read the encoder*/
 static void encoder_read(lv_indev_drv_t *indev_drv, lv_indev_data_t *data)
 {
-    Serial.println(touchRead(ESP32_TOUCH_PIN1));
     static int now_num = 0;
     static int old_num = 0;
     now_num = get_motor_position();
@@ -144,14 +135,22 @@ static void encoder_read(lv_indev_drv_t *indev_drv, lv_indev_data_t *data)
         //update_ws2812_status(WS2812_ROLL, 10);
     }
 
-    if(touch_pad_press(ESP32_TOUCH_PIN1)){
+    const SUPER_KNOB_PAGE_NUM page = get_super_knob_page_status();
+    const bool fan_detail_page = page == IOT_FAN_SPEED_PAGE || page == IOT_FAN_DIRECTION_PAGE;
+    const bool touch_pressed = touch_pad_press(ESP32_TOUCH_PIN1);
+    if(touch_pressed && !fan_detail_page){
         //update_ws2812_status(WS2812_METEOR_OVERTURN, 10);
         data->state = LV_INDEV_STATE_PR;
     }else{
         data->state = LV_INDEV_STATE_REL;
     }
 
-    page_status_check();
+    if ((page == IOT_FAN_SPEED_PAGE || page == IOT_FAN_DIRECTION_PAGE) && data->enc_diff != 0) {
+        smart_fan_handle_encoder_delta(data->enc_diff);
+        data->enc_diff = 0;
+    }
+
+    page_status_check(touch_pressed);
 }
 
 void poweron_timeout(TimerHandle_t pxTimer)

@@ -32,6 +32,10 @@ typedef struct
     lv_obj_t *screen_iot_tomato_clock;
     lv_obj_t *screen_iot_light_belt;
     lv_obj_t *screen_iot_smart_fan;
+    lv_obj_t *screen_iot_fan_speed;
+    lv_obj_t *screen_iot_fan_direction;
+    lv_obj_t *screen_iot_fan_value_label;
+    lv_obj_t *screen_iot_fan_status_label;
     lv_obj_t *screen_iot_music;
     lv_obj_t *screen_about;
     lv_obj_t *screen_game;
@@ -51,6 +55,8 @@ typedef enum
     IOT_COMPUTER_PAGE,
     IOT_LIGHT_BELT_PAGE,
     IOT_SMART_FAN_PAGE,
+    IOT_FAN_SPEED_PAGE,
+    IOT_FAN_DIRECTION_PAGE,
     IOT_MUSIC_PAGE,
     ABOUT_PAGE,
     GAME_PAGE,
@@ -70,6 +76,10 @@ void setup_scr_screen_iot_sensor(lv_ui *ui);
 void setup_scr_screen_tomato_clock(lv_ui *ui);
 void setup_scr_screen_light_belt(lv_ui *ui);
 void setup_scr_screen_smart_fan(lv_ui *ui);
+void setup_scr_screen_fan_speed(lv_ui *ui);
+void setup_scr_screen_fan_direction(lv_ui *ui);
+void smart_fan_handle_encoder_delta(int16_t delta);
+void smart_fan_return_to_menu(void);
 void setup_scr_screen_iot_music(lv_ui *ui);
 void setup_scr_screen_about(lv_ui *ui);
 void setup_scr_screen_game(lv_ui *ui);

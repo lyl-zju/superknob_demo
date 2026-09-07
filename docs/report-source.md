@@ -4,15 +4,13 @@
 
 ## 结论
 
-方案一可实现：ESP32 可在家庭局域网内直接向米家直流变频台式循环扇 BPLDS10DM 发送 MIoT/miIO UDP 指令，不需要虚拟机，也不需要让电脑或手机长期在线。
+方案一可实现：ESP32 可在家庭局域网内直接向实机 `xiaomi.fan.p69` 发送 MIoT/miIO UDP 指令，不需要虚拟机，也不需要让手机充当中转。
 
 综合判断：风速、摆风开关和预设摆角为高可行性；单次向左/向右“点动”为中等可行性，必须先对用户的实际固件做一次验证。
 
 ## 证据链
 
-1. 小米官方页面确认 BPLDS10DM 支持 2.4 GHz Wi-Fi、直吹模式 100 档风速、水平 120° 与垂直 100° 摆动。
-   - https://www.mi.com/global/product/xiaomi-smart-desktop-air-circulation-fan/
-   - https://www.mi.com/global/product/xiaomi-smart-desktop-air-circulation-fan/specs/
+1. token 提取和局域网只读握手确认用户设备为 `xiaomi.fan.p69`，固件 `1.0.5`；属性读取进一步确认 1–100 风速和水平控制映射有效。
 2. 用户实机只读查询确认内部 MIoT model 为 `xiaomi.fan.p69`、固件 `1.0.5`。一份专门针对这一型号的 SmartThings Edge 驱动标注协议证据为 confirmed，并以设备局域网 IP 与 32 位十六进制 token 进行本地通信。`p70` 是另一地区/产品条目的型号，不能代替本机实测结果。
    - https://github.com/wonjj6768/smartthings-miot-edge-driver
    - https://github.com/wonjj6768/smartthings-miot-edge-driver/tree/main/miot/xiaomi-fan-p69
