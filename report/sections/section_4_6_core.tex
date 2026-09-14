@@ -1,0 +1,220 @@
+% 第 4--6 章：FOC、四种手感与 FreeRTOS 双核通信
+\section{FOC 原理及其在项目中的应用}
+
+\subsection{磁场定向控制的基本思想}
+
+三相无刷电机需要按照转子磁场方向切换定子电压。FOC 将三相静止坐标系中的电气量变换到随转子旋转的 $d$-$q$ 坐标系，使励磁方向与产生转矩的方向相互正交。以两相静止坐标为中间量，典型 Park 变换可写为
+
+\begin{equation}
+\begin{bmatrix}x_d\\x_q\end{bmatrix}
+=
+\begin{bmatrix}
+\cos\theta_e & \sin\theta_e\\
+-\sin\theta_e & \cos\theta_e
+\end{bmatrix}
+\begin{bmatrix}x_\alpha\\x_\beta\end{bmatrix},
+\end{equation}
+
+其中 $\theta_e$ 是电角度。对于 7 对极电机，电角度在忽略零点偏置时满足 $\theta_e=7\theta_m$，$\theta_m$ 为 AS5600 读取的机械角。控制器通常把 $d$ 轴指令设为零，把 $q$ 轴作为主要转矩方向，再通过逆 Park 变换和空间矢量 PWM 生成三相占空比。这样可以避免简单六步换相带来的明显转矩脉动，使旋钮在低速和静止附近也能输出方向连续的作用力。
+
+\subsection{本项目中的控制链路}
+
+本项目把 SimpleFOC 作为“触感执行层”。上层触感算法根据角度误差、角速度、页面边界或游戏状态计算控制量 $u_h$，SimpleFOC 则根据当前电角度把 $u_h$ 施加到合适的 $q$ 轴方向，并用 Space Vector PWM 驱动三相桥。控制链路可表示为图 \ref{fig:foc-chain}。
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  node distance=0.9cm,
+  box/.style={draw=black!55, rounded corners=2pt, align=center, minimum height=0.95cm, text width=2.35cm, fill=black!2},
+  arr/.style={-{Latex[length=2.4mm]}, thick, draw=black!70}
+]
+\node[box] (sensor) {AS5600\\机械角 $\theta_m$};
+\node[box, right=of sensor] (angle) {极对数与零点\\电角度 $\theta_e$};
+\node[box, right=of angle] (law) {触感规律\\生成 $u_h$};
+\node[box, right=of law] (foc) {逆变换与 SVPWM\\三相占空比};
+\node[box, right=of foc] (plant) {驱动板与 BLDC\\轴上作用力};
+\draw[arr] (sensor) -- (angle);
+\draw[arr] (angle) -- (law);
+\draw[arr] (law) -- (foc);
+\draw[arr] (foc) -- (plant);
+\draw[arr] (plant.south) |- ++(0,-0.65) -| node[pos=0.25, below]{角度反馈} (sensor.south);
+\end{tikzpicture}
+\caption{FOC 在 SuperKnob 中的执行链路}
+\label{fig:foc-chain}
+\end{figure}
+
+代码首先在 23/5 引脚上启动 400 kHz I2C，将 AS5600 连接到电机对象；随后设置驱动电源为 12 V、传感器对齐电压为 3 V，并选择 Space Vector PWM。电机初始化与 FOC 对齐完成后，控制模式从角度控制切换为 \texttt{MotionControlType::torque}。FOC 任务在循环中持续调用 \texttt{motor.loopFOC()}，再调用 \texttt{motor.move(control)} 写入本次触感控制量。
+
+\begin{lstlisting}[caption={FOC 初始化的核心代码结构},label={lst:foc-init}]
+I2Cone.begin(23, 5, 400000UL);
+sensor.init(&I2Cone);
+motor.linkSensor(&sensor);
+
+driver.voltage_power_supply = 12;
+driver.init();
+motor.linkDriver(&driver);
+
+motor.voltage_sensor_align = 3;
+motor.foc_modulation = FOCModulationType::SpaceVectorPWM;
+motor.init();
+motor.initFOC();
+
+motor.controller = MotionControlType::torque;
+motor.loopFOC();
+motor.move(control_value);
+\end{lstlisting}
+
+\subsection{初始化与运行参数}
+
+初始化阶段使用速度 PID 参数 $P=0.08$、$I=4$、$D=0.0002$，速度低通时间常数为 0.02 s，角度环比例系数为 20，速度上限为 5 rad/s。完成对齐后，\texttt{init\_angle()} 在保持当前角度的同时把控制电压限幅从零逐步提升至 8 V。进入触感循环后，速度 PID 对象被复用于位置误差到控制量的映射：不同档距会改变微分项，不同吸附强度会改变比例项与限幅。
+
+电机任务每轮末尾执行 \texttt{vTaskDelay(1)}。它没有建立固定周期的硬实时定时器，因此实际更新间隔会受 FreeRTOS tick、串口打印和分支路径影响。对当前交互频率而言，该循环足以提供连续触感；若后续需要可量化的带宽与稳定裕度，应使用固定周期调度并记录实际采样间隔。
+
+\subsection{“力矩模式”的实现边界}
+
+项目代码没有创建或链接相电流传感器，也没有设置电流控制器。因此，SimpleFOC 的 torque 模式在当前工程中采用电压型控制：\texttt{motor.move()} 的数值本质上是受 \texttt{voltage\_limit} 约束的 q 轴电压指令，而不是以 N$\cdot$m 为单位的闭环转矩设定值。在电机参数、母线电压和转速变化不大时，q 轴电压与输出作用力近似单调相关，适合通过实验调出清晰触感；但负载、绕组温升和反电动势会改变相同指令对应的真实转矩。
+
+这一边界不影响软件定义触感的结构。触感算法仍然产生带方向和幅值的控制量，FOC 仍然负责按转子方向平滑换相。后续若增加低侧电流采样，只需把底层升级为电流闭环，再重新标定各触感增益，就能提高不同工作条件下的力矩一致性。
+
+\section{四种手感的实现}
+
+\subsection{统一配置结构}
+
+常规触感由 \texttt{KnobConfig} 描述，字段包括位置数量、当前位置、单格角宽、吸附强度、边界强度、跨格阈值和阻尼强度。页面通过 \texttt{update\_motor\_config(index)} 复制预设配置，随后发送 \texttt{CHECKOUT\_PAGE}，电机任务将当前轴角设置为新的吸附中心并刷新控制参数。该机制把“页面选择何种触感”和“电机如何连续计算作用力”分离开来。
+
+\subsection{棘轮触感}
+
+棘轮模式维护当前吸附中心 $\theta_c$。轴角与中心的偏差为
+\begin{equation}
+e_\theta=\theta_m-\theta_c.
+\end{equation}
+当 $e_\theta$ 超过“档距 $\times$ 跨格阈值”时，程序把 $\theta_c$ 平移一个档距，并同步增加或减少逻辑位置。未跨格时，控制器持续把旋钮拉回最近吸附中心。中心附近设置一个不超过 1$^\circ$ 的死区，减小静止抖动；旋钮静止 500 ms 且仍位于中心附近时，中心以很小的系数缓慢跟随实测角度，用于消除长期偏置。
+
+主菜单使用配置 1：档距约 8.226$^\circ$，吸附强度 2.3，位置数量为 0 表示不限制档位数。风扇详情页沿用同一物理档距和强度，在页面软件侧把输入灵敏度放大 2 倍，避免通过缩小闭环档距来牺牲稳定性。
+
+\subsection{边界触感}
+
+边界模式在有限位置范围的首端或末端检测越界方向。如果用户继续向范围外旋转，程序把速度 PID 的比例系数从吸附强度对应值切换为边界强度对应值，同时把输出限幅从 3 提高到 10，从而产生明显的反向作用力。配置 2 和配置 3 都定义了 256 个位置、1$^\circ$ 档距和起始位置 127；前者带吸附档位，后者关闭档位但保留边界。配置 4 则定义两个相隔 60$^\circ$ 的位置，形成开关式触感。
+
+边界力不是独立的机械挡块，而是有限位置状态与增强控制增益共同形成的软件限位。断电时该限位消失，因此它适合交互提示和参数保护，不应承担人身或结构安全限位功能。
+
+\subsection{阻尼触感}
+
+阻尼模式不设置目标位置，只对转速施加反向控制量：
+\begin{equation}
+u_h=-b\,\hat{\omega}.
+\end{equation}
+其中 $b=0.6$，$\hat{\omega}$ 是低通后的轴速度。代码采用指数滑动平均
+\begin{equation}
+\hat{\omega}_k=(1-\alpha)\hat{\omega}_{k-1}+\alpha\omega_k,
+\qquad \alpha=0.05,
+\end{equation}
+并在 $|\hat{\omega}|\leq0.15$ rad/s 时输出零，超过死区后把控制量限制在 $\pm3$。低通与死区用于抑制 AS5600 量化差分造成的速度尖峰。该模式只有速度项，没有位置恢复项，因此旋转时感觉“发沉”，松手后停在当前位置而不会回到初始点。钓鱼游戏在进入实际游戏阶段时选择配置 5 使用该手感。
+
+\subsection{弹簧触感}
+
+跳一跳采用独立工作模式而不是普通 \texttt{KnobConfig}。进入游戏时，FOC 任务记录中心角 $\theta_0$，令 $\Delta\theta=\theta_m-\theta_0$，并计算
+\begin{equation}
+u_h=-k\Delta\theta-b\omega,
+\qquad k=3.2,\quad b=0.08.
+\end{equation}
+控制量限制在 $\pm5.5$。当旋转角超过 100$^\circ$ 时，程序叠加额外反向项，使末端逐渐变硬。蓄力比例由 $|\Delta\theta|/100^\circ$ 限制到 0--1 得到。峰值达到 8$^\circ$ 后，如果角度从峰值回落至少 3$^\circ$ 且速度方向指向中心，FOC 任务就把一次“释放”事件写入共享状态，LVGL 游戏任务读取蓄力比例并开始跳跃动画。
+
+PC 模式中的 Alt+Tab 也采用回中型控制，但实现更简化：控制量为 $u_h=-12\Delta\theta$，越过约 0.55 rad 后触发窗口切换，回到 0.5 rad 内释放 Alt 键。另一个鼠标左右键模式使用 $u_h=-15\Delta\theta$，向两侧越过阈值分别按下左右键。
+
+\subsection{触感配置与应用映射}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{p{0.08\linewidth}p{0.18\linewidth}p{0.17\linewidth}p{0.18\linewidth}p{0.27\linewidth}}
+\toprule
+索引 & 位置范围 & 档距 & 主要参数 & 代码中的用途 \\
+\midrule
+0 & 无限制 & 10$^\circ$ & 无吸附 & 进入 PC 系统前的过渡配置 \\
+1 & 无限制 & 8.226$^\circ$ & 吸附强度 2.3 & 主菜单、游戏菜单、风扇菜单 \\
+2 & 256 档 & 1$^\circ$ & 吸附 1，边界 1 & 台灯、番茄钟等精细离散调节 \\
+3 & 256 档 & 1$^\circ$ & 无吸附，边界 1 & 有限范围的连续调节预设 \\
+4 & 2 档 & 60$^\circ$ & 跨格阈值 0.55 & 开关式强段落预设 \\
+5 & 无限制 & 不适用 & 阻尼 0.6 & 钓鱼游戏的连续追踪 \\
+6 & 无限制 & 8.226$^\circ$ & 吸附 2.3 & 风扇详情页，软件侧 2 倍灵敏度 \\
+\bottomrule
+\end{tabular}
+\caption{\texttt{super\_knob\_configs} 预设与应用关系}
+\label{tab:haptic-configs}
+\end{table}
+
+\section{FreeRTOS 双核调度与跨核通信}
+
+\subsection{任务划分}
+
+主界面模式创建两个固定核任务。\texttt{Task\_lvgl} 的栈大小为 4096 字节、优先级为 3，固定运行在 Core 0；\texttt{Task\_foc} 的栈大小同为 4096 字节、优先级为 2，固定运行在 Core 1。Arduino \texttt{loop()} 只每 10 s 延时一次，不承担实时业务。页面刷新、动画、输入设备和开机进度均在 LVGL 任务中处理；传感器读取、\texttt{loopFOC()}、触感状态机和电机 PWM 更新均在 FOC 任务中处理。
+
+PC 模式为了给 BLE 栈保留内存，不创建 LVGL 任务，只直接在 TFT 上显示模式说明。FOC 任务仍在 Core 1 运行，并在每个循环中执行 BLE HID 角度映射。由此可见，“双核 LVGL + FOC”是主界面模式的结构，PC 模式则退化为电机任务主导的单业务核结构。
+
+\begin{lstlisting}[basicstyle=\ttfamily\footnotesize,caption={任务与队列创建的核心结构},label={lst:task-create}]
+motor_msg_Queue = xQueueCreate(10, sizeof(struct _knob_message *));
+motor_rcv_Queue = xQueueCreate(10, sizeof(struct _knob_message *));
+
+xTaskCreatePinnedToCore(Task_lvgl, "Task_lvgl", 4096, NULL, 3,
+                        &Task_lvgl_Handle, 0);
+xTaskCreatePinnedToCore(Task_foc, "Task_foc", 4096, NULL, 2,
+                        &Task_foc_Handle, 1);
+\end{lstlisting}
+
+\subsection{双向消息队列}
+
+系统创建两条长度为 10 的队列，队列元素均为 \texttt{\_knob\_message*} 指针。\texttt{motor\_rcv\_Queue} 从 UI 指向电机，传递页面或功能事件；\texttt{motor\_msg\_Queue} 从电机指向 UI，传递初始化状态。表 \ref{tab:queue-protocol} 给出了代码中已定义的消息协议。
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{p{0.18\linewidth}p{0.31\linewidth}p{0.39\linewidth}}
+\toprule
+方向 & 消息 & 电机或界面侧处理 \\
+\midrule
+UI 到 Motor & \texttt{CHECKOUT\_PAGE} & 以当前轴角重置吸附中心，更新触感参数并产生短振动 \\
+UI 到 Motor & \texttt{BUTTON\_CLICK} & 执行正负方向各 2 个短周期的点击振动 \\
+UI 到 Motor & \texttt{MUSIC\_PLAY} & 退出常规触感，重配三路 LEDC 并开始播放旋律 \\
+UI 到 Motor & \texttt{MUSIC\_STOP} & 停止音乐并通过重启恢复 FOC PWM 资源 \\
+UI 到 Motor & \texttt{JUMP\_SPRING\_START} & 记录当前中心角，清空蓄力与释放状态，进入弹簧模式 \\
+Motor 到 UI & \texttt{MOTOR\_INIT} & 将开机进度条更新到 30\% \\
+Motor 到 UI & \texttt{MOTOR\_INIT\_SUCCESS} & FOC 对齐完成后将进度条更新到 75\% \\
+Motor 到 UI & \texttt{MOTOR\_INIT\_END} & 电压渐入完成后更新到 100\%，随后进入主界面 \\
+Motor 到 UI & \texttt{MOTOR\_MUSIC\_END} & 界面保留对应处理分支，当前音乐流程实际通过重启返回 \\
+\bottomrule
+\end{tabular}
+\caption{双向队列消息协议}
+\label{tab:queue-protocol}
+\end{table}
+
+\subsection{页面切换的跨核过程}
+
+以从主菜单进入台灯页面为例，LVGL 的点击回调先创建目标页面并执行切屏动画，再调用 \texttt{update\_motor\_config(2)} 选择 1$^\circ$ 精细档位，最后调用 \texttt{update\_page\_status(CHECKOUT\_PAGE)}。该函数把消息指针压入 \texttt{motor\_rcv\_Queue}。Core 1 上的 FOC 任务以非阻塞方式接收消息，收到后把当前 \texttt{shaft\_angle} 设为新的档位中心，按新配置计算 PID 参数，并执行一次短振动。消息处理结束后，FOC 任务立即回到连续 \texttt{loopFOC()} 循环。
+
+电机初始化状态沿反方向传递。FOC 任务在传感器初始化前、\texttt{initFOC()} 完成后以及电压渐入完成后分别发送三个状态。LVGL 任务最多等待 1 tick 接收消息，并据此更新欢迎页进度条。这样界面不需要轮询底层初始化细节，电机任务也不需要直接访问 LVGL 控件。
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  box/.style={draw=black!55, rounded corners=2pt, align=left, text width=4.6cm, minimum height=1.2cm, fill=black!2, inner sep=8pt},
+  arr/.style={-{Latex[length=2.5mm]}, thick, draw=black!70}
+]
+\node[box] (lvgl) {\textbf{Core 0：Task\_lvgl}\newline TFT 刷新、LVGL 动画、编码器输入、触摸消抖、页面状态};
+\node[box, right=3.0cm of lvgl] (foc) {\textbf{Core 1：Task\_foc}\newline AS5600 采样、loopFOC、触感控制、音乐与弹簧状态机};
+\draw[arr] ([yshift=7pt]lvgl.east) -- node[above, align=center, font=\scriptsize, fill=white, inner sep=1pt]{motor\_rcv\_Queue\\UI 事件} ([yshift=7pt]foc.west);
+\draw[arr] ([yshift=-13pt]foc.west) -- node[below, align=center, font=\scriptsize, fill=white, inner sep=1pt]{motor\_msg\_Queue\\电机状态} ([yshift=-13pt]lvgl.east);
+\end{tikzpicture}
+\caption{主界面模式下的双核任务与队列}
+\label{fig:dual-core}
+\end{figure}
+
+\subsection{共享状态与并发保护}
+
+跳一跳的蓄力比例和释放事件没有放入通用队列，而是由 FOC 任务写入三个共享变量，LVGL 任务通过 \texttt{get\_jump\_charge\_percent()} 和 \texttt{consume\_jump\_release()} 读取。代码使用 ESP32 的 \texttt{portMUX\_TYPE} 临界区保护这些变量，避免浮点值或标志在跨核读写时出现不一致。
+
+通用消息队列传递的是指向全局 \texttt{LVGL\_MSG} 与 \texttt{MOTOR\_MSG} 的指针，而不是消息结构体副本。当前事件频率较低，发送后通常会很快被另一核取走；但如果同一方向连续发送多个事件，后一次写入可能在前一次消费前覆盖全局对象。更稳健的实现可以把队列元素大小改为 \texttt{sizeof(\_knob\_message)} 并发送结构体值，或为每条消息使用独立存储。两处 \texttt{xQueueSend} 的等待时间均为 0，队列满时消息会直接丢失，因此后续还应检查返回值并记录溢出。
+
+\subsection{双核设计的收益}
+
+FOC 控制对更新连续性敏感，TFT 刷新和页面动画则可能一次传输较多像素。将两者固定到不同 CPU 核后，显示操作不会直接占用电机任务的执行上下文。队列只传递离散事件与少量状态，页面无需了解 FOC 内部变量，电机任务也无需操作 LVGL 对象。该结构降低了模块耦合，并为局域网控制、BLE 和游戏逻辑继续扩展保留了清晰边界。

@@ -1,0 +1,91 @@
+% 第 2--3 章：硬件平台与软件平台
+\section{硬件平台}
+
+\subsection{核心硬件组成}
+
+主控采用 ESP32 LOLIN32 Lite。该芯片提供双核处理器、FreeRTOS 运行环境、I2C、SPI、PWM、Wi-Fi 与 BLE，能够在单芯片上并行承担图形界面、电机控制和无线通信。执行器为 2804 三相无刷电机，代码按 7 对极建立 \texttt{BLDCMotor(7)} 对象。电机由三路 PWM 驱动板控制，使能脚由 GPIO12 管理。转子位置由 AS5600 磁编码器提供，固件以 400 kHz I2C 读取传感器。
+
+显示模块使用 240\,$\times$\,320 分辨率的 ST7789 TFT，TFT\_eSPI 负责 SPI 传输，LVGL 负责页面与控件。显示任务申请一块 240\,$\times$\,40 像素的内部 DMA 缓冲区，约占 19.2 KB，通过分条刷新降低图形缓冲对 ESP32 内存的压力。GPIO0 的电容触摸通道同时承担页面确认以及 PC 模式切换输入。
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{p{0.22\linewidth}p{0.23\linewidth}p{0.43\linewidth}}
+\toprule
+模块 & 型号或接口 & 在系统中的作用 \\
+\midrule
+主控 & ESP32 LOLIN32 Lite & 运行 Arduino 框架、FreeRTOS、LVGL、SimpleFOC、Wi-Fi 与 BLE \\
+执行器 & 2804 BLDC，7 对极 & 输出双向可控作用力，形成触感与振动反馈 \\
+位置反馈 & AS5600，I2C 地址 0x36 & 读取机械角度，供 FOC 和交互逻辑计算位置与速度 \\
+电机驱动 & 三相 3PWM 驱动板 & 接收 ESP32 的三路 PWM 并驱动 BLDC，相电源按 12 V 配置 \\
+显示 & ST7789，240\,$\times$\,320 & 显示主菜单、状态信息与各功能页面 \\
+触摸输入 & ESP32 GPIO0 电容触摸 & 作为确认、退出及 PC 子模式切换按键 \\
+结构件 & 自研转接板与外壳 & 组织屏幕、主控、驱动、编码器及电机的电气和机械连接 \\
+\bottomrule
+\end{tabular}
+\caption{SuperKnob 核心硬件}
+\label{tab:hardware}
+\end{table}
+
+\subsection{关键接口与引脚}
+
+表 \ref{tab:pins} 汇总了 \texttt{motor.cpp} 与 \texttt{platformio.ini} 中的实际引脚配置。电机与屏幕分别占用不同的 PWM、I2C 和 SPI 资源，便于在双核任务中并行运行。电机驱动的 \texttt{voltage\_power\_supply} 设置为 12 V，固件把控制电压上限设为 8 V；初始化时还通过 1000 个递增步骤逐渐放开电压限幅，以减轻对齐完成后的突发作用力。
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{p{0.29\linewidth}p{0.21\linewidth}p{0.37\linewidth}}
+\toprule
+信号 & ESP32 引脚 & 说明 \\
+\midrule
+电机 PWM A/B/C & 32 / 33 / 25 & 三相 3PWM 输出 \\
+电机使能 & 12 & 高电平使能驱动板 \\
+AS5600 SDA/SCL & 23 / 5 & 400 kHz I2C 总线 \\
+TFT MOSI/SCLK & 19 / 18 & ST7789 SPI 数据与时钟 \\
+TFT CS/DC/RST/BL & 16 / 15 / 13 / 17 & 片选、数据命令、复位与背光 \\
+触摸确认 & 0 & 电容触摸通道 \\
+\bottomrule
+\end{tabular}
+\caption{固件中的关键引脚配置}
+\label{tab:pins}
+\end{table}
+
+\subsection{信号闭环与结构集成}
+
+磁铁与电机轴同轴安装后，AS5600 提供连续机械角度。ESP32 将机械角与 7 对极相乘得到电角度，并根据初始化得到的零电角完成换相。三相驱动板把 PWM 占空比转换为绕组电压，电机产生的反作用力通过旋钮轴直接反馈给用户。屏幕、编码器、电机驱动和主控之间的连接由自研转接板重新组织，外壳则负责保证磁铁、编码器、电机轴和显示屏的相对位置。该结构要求电气闭环和机械同轴度同时满足条件，任何安装偏心、磁铁距离不合适或供电压降都会直接表现为触感波动。
+
+\section{软件平台}
+
+\subsection{开发环境与依赖}
+
+工程使用 PlatformIO 管理构建和依赖，目标环境为 \texttt{lolin32\_lite}，底层采用 Arduino framework。\texttt{platformio.ini} 固定了主要库版本与 TFT 配置，表 \ref{tab:software-stack} 列出实际软件栈。项目同时内置 BleCombo 源码，用同一 BLE 连接提供键盘和鼠标 HID 能力。
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{p{0.28\linewidth}p{0.22\linewidth}p{0.38\linewidth}}
+\toprule
+组件 & 版本或配置 & 用途 \\
+\midrule
+PlatformIO Espressif32 & 7.1.1 & 工程构建、下载与依赖管理 \\
+Arduino framework & ESP32 平台默认版本 & 硬件接口、任务入口与兼容库运行环境 \\
+SimpleFOC & 2.2.1 & 传感器角度接入、FOC 换相和 3PWM 输出 \\
+LVGL & 8.4.0 & 页面、控件、动画、输入设备与定时器 \\
+TFT\_eSPI & 2.5.0 & ST7789 SPI 显示驱动与 DMA 刷新 \\
+ESP32 BLE Keyboard & 0.3.2 兼容版本 & BLE HID 键盘基础能力 \\
+项目内置 BleCombo & 本地源码 & 组合键盘与鼠标 HID \\
+\bottomrule
+\end{tabular}
+\caption{项目软件栈}
+\label{tab:software-stack}
+\end{table}
+
+\subsection{软件分层}
+
+应用层由各 LVGL 页面和功能控制器组成。页面通过旋转和触摸完成焦点切换、参数调节与状态显示。交互层位于 \texttt{display.cpp}，将电机配置中的离散位置变化转换为 LVGL 的 \texttt{enc\_diff}，并对 GPIO0 触摸进行连续采样和锁存消抖。任务与通信层由 FreeRTOS 任务、队列、软件定时器以及少量临界区构成。控制层位于 \texttt{motor.cpp}，负责角度采样、FOC 更新和触感控制量计算。驱动层包括 SimpleFOC、TFT\_eSPI、BleCombo、Wi-Fi UDP 与 ESP32 LEDC。
+
+这种分层使页面不直接操作三相 PWM。页面只选择 \texttt{KnobConfig} 或发送事件，电机任务在自己的循环中执行配置更新。钓鱼游戏选择配置 5 进入纯粘性阻尼，跳一跳发送 \texttt{JUMP\_SPRING\_START} 进入独立弹簧状态机，音乐页面发送 \texttt{MUSIC\_PLAY} 暂时把三路 PWM 资源切换到 LEDC 音符输出。
+
+\subsection{两种启动模式}
+
+固件通过 RTC 非初始化内存中的 \texttt{current\_os\_mode} 区分主界面模式与 PC 模式。硬件复位时该变量被强制置零，系统创建 LVGL 任务并启动主界面；软件重启进入 PC 模式时保留该变量，只直接初始化 TFT 并启动 BLE，从而把较多内存留给 BLE 协议栈。FOC 任务在两种模式中都会启动。PC 模式下，电机任务直接调用 \texttt{run\_pc\_mouse\_logic()}，根据旋钮角度同时生成 HID 事件和对应作用力。

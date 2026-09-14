@@ -1,0 +1,132 @@
+% !TeX program = xelatex
+\PassOptionsToPackage{quiet}{fontspec}
+\documentclass[12pt,a4paper,UTF8]{ctexart}
+\usepackage{projectreport}
+
+\projecttitle{SuperKnob 基于 FOC 的多功能智能旋钮}
+\projectcourse{嵌入式系统高级实践}
+\projectmembers{李彦霖（组长），朱熠正，康鑫杰}{ }
+\projectschool{控制科学与工程学院}
+\projectteacher{待填写}
+\projectdate{2026 年 9 月}
+
+\begin{document}
+\makeprojectcover
+\setcounter{tocdepth}{2}
+\tableofcontents
+\newpage
+
+\section*{摘要}
+\addcontentsline{toc}{section}{摘要}
+
+SuperKnob 是一套以 ESP32、三相无刷电机、AS5600 磁编码器和 ST7789 显示屏为核心的智能旋钮系统。项目用电机主动输出的可控作用力替代固定机械结构，使同一套硬件能够通过软件切换棘轮、边界、阻尼和弹簧四类触感，并把旋转与触摸输入用于图形界面、电脑控制、计时提醒、音乐演奏、物联网设备控制和小游戏等场景。
+
+系统的软件结构围绕实时控制与图形交互的解耦展开。电机任务固定运行在 ESP32 Core 1，持续读取 AS5600 的角度与速度并执行 SimpleFOC 闭环换相；LVGL 任务固定运行在 Core 0，负责屏幕刷新、页面状态和输入事件。两个任务通过 FreeRTOS 队列传递页面切换、点击反馈、音乐播放和弹簧模式等控制事件，并通过另一条队列返回电机初始化状态。现有代码没有配置相电流采样，因此触感算法给出的“力矩”在实现上是受限的 q 轴电压指令。该实现足以形成稳定可辨识的旋钮触感，同时也明确了后续升级到电流闭环转矩控制的接口边界。
+
+\textbf{关键词：}智能旋钮；磁场定向控制；软件定义触感；FreeRTOS；LVGL；ESP32
+
+\section{项目简介}
+
+\subsection{项目背景与目标}
+
+传统旋钮依靠弹簧、钢珠、限位柱等机械结构形成段落感与边界感。一旦机械结构确定，旋钮的档位数量、档距和回弹方式也随之固定。SuperKnob 将无刷电机作为双向力反馈执行器，把“旋钮应该如何用力”写成可切换的控制规律。页面或功能改变时，系统只需修改目标作用力的计算方式，就能让同一个旋钮表现为有清晰吸附点的菜单滚轮、带上下限的参数旋钮、松手回中的弹簧杆，或仅在运动时产生阻力的连续控制器。
+
+项目的工程目标包括三部分。第一，完成 ESP32、BLDC、磁编码器、显示屏、驱动板和触摸输入的整机集成。第二，在 SimpleFOC 的基础上实现稳定的力反馈控制，并把触感参数封装为可切换配置。第三，以 LVGL 页面、BLE HID、局域网风扇控制、计时器、音乐和游戏验证旋钮交互在不同任务中的适配能力。
+
+\subsection{系统功能与代码范围}
+
+当前固件的主界面包含台灯、番茄钟、音乐、风扇、游戏、跳一跳、电脑、传感器和关于等入口。答辩 PPT 将电脑控制概括为网页滚轮、音量调节和 Alt+Tab 三种模式；现有 \texttt{bluetooth\_mouse.cpp} 还实现了第四种鼠标左右键模式，因此固件通过触摸 GPIO0 实际循环切换四种 PC 子模式。
+
+报告涉及的主要源文件见表 \ref{tab:source-map}。其中，\texttt{motor.cpp} 是 FOC 与触感算法的核心；\texttt{main.cpp}、\texttt{display.cpp} 共同定义双核任务和队列通信；各页面文件负责在具体交互场景中选择触感配置或发送控制事件。
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{p{0.27\linewidth}p{0.60\linewidth}}
+\toprule
+源文件 & 主要职责 \\
+\midrule
+\texttt{src/main.cpp} & 创建消息队列，选择主界面或 PC 运行模式，将 LVGL 与 FOC 任务固定到不同 CPU 核 \\
+\texttt{src/motor.cpp} & 初始化 AS5600、三相驱动和 SimpleFOC，计算棘轮、边界、阻尼与弹簧触感，处理音乐 PWM \\
+\texttt{src/display.cpp} & 初始化 TFT 与 LVGL，读取旋钮位置和触摸输入，收发跨任务消息 \\
+\texttt{src/bluetooth\_mouse.cpp} & 将旋钮角度映射为网页滚轮、音量、Alt+Tab 和鼠标左右键输入 \\
+\texttt{src/ui\_pages/*.cpp} & 构建功能页面，并根据页面状态切换 KnobConfig 或发送事件 \\
+\bottomrule
+\end{tabular}
+\caption{项目主要代码模块}
+\label{tab:source-map}
+\end{table}
+
+\subsection{总体工作链路}
+
+图 \ref{fig:system-chain} 表示旋钮的闭环工作链路。AS5600 读取电机轴角度，ESP32 根据页面状态选择触感模型并计算控制量，SimpleFOC 把控制量转换成三相 PWM，电机再把力反馈施加到用户手上。与此同时，LVGL 将同一角度信息解释为菜单焦点变化、参数增减或游戏输入。系统因此形成“物理运动、控制计算、界面状态、触感反馈”相互关联的交互闭环。
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  node distance=1.15cm and 1.0cm,
+  box/.style={draw=black!55, rounded corners=2pt, align=center, minimum height=1.05cm, text width=2.55cm, fill=black!2},
+  arr/.style={-{Latex[length=2.6mm]}, thick, draw=black!70}
+]
+\node[box] (user) {用户旋转或触摸};
+\node[box, right=of user] (sensor) {AS5600\\角度与速度};
+\node[box, right=of sensor] (esp) {ESP32\\触感模型与页面逻辑};
+\node[box, right=of esp] (driver) {SimpleFOC 与\\三相 PWM 驱动};
+\node[box, below=1.15cm of esp] (motor) {BLDC 输出作用力\\形成触感反馈};
+\draw[arr] (user) -- (sensor);
+\draw[arr] (sensor) -- (esp);
+\draw[arr] (esp) -- (driver);
+\draw[arr] (driver) |- (motor);
+\draw[arr] (motor) -| node[pos=0.2, below]{机械反馈} (user);
+\end{tikzpicture}
+\caption{SuperKnob 的输入、控制与反馈链路}
+\label{fig:system-chain}
+\end{figure}
+
+% 第 2--3 章：硬件平台与软件平台
+\input{sections/section_2_3_platform}
+
+% 第 4--6 章：FOC、四种手感与 FreeRTOS 双核通信
+\input{sections/section_4_6_core}
+
+% 第 7 章：功能模块
+\input{sections/section_7_modules}
+
+% 第 8 章：设计、制作、调试与结果
+\input{sections/section_8_process}
+
+\section{项目总结 个人体会与成员分工}
+
+\subsection{项目总结}
+\placeholder
+
+\subsection{个人体会}
+
+\subsubsection{李彦霖}
+\placeholder
+
+\subsubsection{朱熠正}
+\placeholder
+
+\subsubsection{康鑫杰}
+\placeholder
+
+\subsection{成员分工}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{p{0.16\linewidth}p{0.38\linewidth}p{0.33\linewidth}}
+\toprule
+成员 & 具体分工 & 主要交付与协作内容 \\
+\midrule
+李彦霖 & 待补充 & 待补充 \\
+朱熠正 & 待补充 & 待补充 \\
+康鑫杰 & 待补充 & 待补充 \\
+\bottomrule
+\end{tabular}
+\caption{成员分工记录}
+\label{tab:member-division}
+\end{table}
+
+\end{document}
