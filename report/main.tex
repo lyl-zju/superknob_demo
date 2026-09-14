@@ -3,11 +3,11 @@
 \documentclass[12pt,a4paper,UTF8]{ctexart}
 \usepackage{projectreport}
 
-\projecttitle{SuperKnob 基于 FOC 的多功能智能旋钮}
+\projecttitle{SuperKnob 基于 ESP32 的FOC多功能智能旋钮}
 \projectcourse{嵌入式系统高级实践}
 \projectmembers{李彦霖（组长），朱熠正，康鑫杰}{ }
 \projectschool{控制科学与工程学院}
-\projectteacher{待填写}
+\projectteacher{陆玲霞，叶炜}
 \projectdate{2026 年 9 月}
 
 \begin{document}
@@ -103,7 +103,10 @@ SuperKnob 是一套以 ESP32、三相无刷电机、AS5600 磁编码器和 ST778
 \subsection{个人体会}
 
 \subsubsection{李彦霖}
-\placeholder
+
+作为项目组长，我参与了项目从方案构想到整机实现的全过程。从零搭建项目架构时，我需要统筹电机控制、LVGL 界面和各功能模块之间的关系，并逐步确定任务划分、通信方式与开发顺序。这一过程使我深入理解了 FOC 的基本原理与触感控制方法，也掌握了利用 FreeRTOS 进行任务调度和跨任务通信的思路。
+
+在开发过程中，我进一步锻炼了软硬件联合调试能力，学会从接线、驱动、控制参数和程序逻辑等多个方面定位问题。同时，组长工作也让我认识到及时沟通和明确分工的重要性。通过与队友协调开发进度、讨论方案并共同解决问题，我在技术实践和团队协作方面都获得了较大提升。
 
 \subsubsection{朱熠正}
 \placeholder
@@ -118,11 +121,16 @@ SuperKnob 是一套以 ESP32、三相无刷电机、AS5600 磁编码器和 ST778
 \small
 \begin{tabular}{p{0.16\linewidth}p{0.38\linewidth}p{0.33\linewidth}}
 \toprule
-成员 & 具体分工 & 主要交付与协作内容 \\
+成员 & 具体分工   \\
 \midrule
-李彦霖 & 待补充 & 待补充 \\
-朱熠正 & 待补充 & 待补充 \\
-康鑫杰 & 待补充 & 待补充 \\
+李彦霖 & FOC 触感引擎实现，LVGL + 电机联调，音乐功能与电机交互展示，跳一跳游戏设计
+  \\
+朱熠正 & 触摸引脚调试，BLE 电脑控制 + 番茄钟，物联网功能开发
+   \\
+康鑫杰 & 转接板设计 + 外壳建模，整机装配与集成调试，钓鱼游戏设计
+  \\
+三人共同工作 & FOC 原理学习、整机联调、稳定性测试、代码整理与结题汇报
+  \\
 \bottomrule
 \end{tabular}
 \caption{成员分工记录}
