@@ -54,7 +54,30 @@ f_{\mathrm{out}}=3f_{\mathrm{note}}
 \placeholder
 
 \subsection{钓鱼小游戏}
-\placeholder
+
+\subsubsection{把旋钮设计成阻尼卷线器}
+
+钓鱼游戏没有沿用普通 \texttt{KnobConfig} 档位，而是把旋钮切换为纯粘性阻尼。进入游戏时页面调用 \texttt{update\_motor\_config(5)}，选中 \texttt{super\_knob\_configs} 中 \texttt{damping\_strength}=0.6 的配置 5；此时电机不再维护档位中心，而是输出与角速度成正比的反向力矩
+\begin{equation}
+\tau=-c\,\omega,
+\end{equation}
+其中 $\omega$ 为低通滤波后的角速度。该力矩没有回中项，旋钮转动时受到随速度增大的阻力，松手后停在哪就停在哪，像一根收线卷线器：转一下捕捉框移动一段，停止转动则框停在当前深度。
+
+阻尼反馈直接使用传感器差分测速。12 位 AS5600 的量化噪声会使相邻采样产生约 $1.5\ \text{rad/s}$ 的速度尖峰，直接反馈会把噪声放大成持续抖动。为此固件先用一阶低通
+\begin{equation}
+\hat\omega_{k}=(1-\alpha)\hat\omega_{k-1}+\alpha\,\omega_k,\qquad \alpha=0.05
+\end{equation}
+磨平尖峰，再经过 $0.15\ \text{rad/s}$ 的静止死区，低于死区的残余波动直接输出零力矩。游戏页面的 \texttt{game\_tick()} 每 30 ms 读取一次旋钮相对转角 $\Delta\theta$，并按下式移动捕捉框
+\begin{equation}
+\Delta y=-\frac{\Delta\theta}{2\pi}\,H,
+\end{equation}
+其中 $H$ 为游戏区高度，即旋钮转满一圈正好把捕捉框从区底送到区顶。菜单阶段仍使用配置 1 的连续强档位，旋转有清晰的吸附感，供用户在开始、难度和最高分三个选项间切换。
+
+\subsubsection{游戏状态与得分规则}
+
+游戏开始后，代表鱼的圆点沿竖直方向随机游动。鱼在随机加速度之外还会以一定概率进入短时冲刺，速度限幅为 $\pm 3.5$ 倍难度系数，触到上下边界则反弹，因此玩家必须持续调整捕捉框去追踪鱼的位置。进度条按鱼与捕捉框的相对位置增减：当两者中心距离满足 $|y_{\text{fish}}-y_{\text{bar}}|\le h_{\text{bar}}/2+r_{\text{fish}}$ 时进度增加，否则下降；进度到达 100 记钓到一条，得分加一并通过 \texttt{BUTTON\_CLICK} 触发一次震动，随后放出一条新鱼并把进度重置为 50；进度归零则判定鱼已逃脱，页面记录本局成绩并在一段时间后自动回到菜单。
+
+难度分为三档，在菜单中切换，对应鱼速倍率 $0.7$、$1.0$ 和 $1.5$。最高分保存在 \texttt{RTC\_NOINIT\_ATTR} 内存中，软重启不清零，仅彻底断电后才会复位，读取时还做了 $0\sim9999$ 的越界兜底。整个游戏形成“阻尼手感—捕捉框—鱼的位置—进度与得分”的闭环：旋钮的阻尼手感不再只是操作辅助，而是直接决定玩家能否稳定地把捕捉框停在目标深度上，手感本身就是游戏规则的一部分。
 
 \subsection{跳一跳}
 

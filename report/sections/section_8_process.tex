@@ -14,7 +14,49 @@
 最后，为提升设备的完整性与外观效果，我们使用 SolidWorks 对 SuperKnob 外壳及内部安装结构进行建模，并结合显示屏、电机、转接板和连接线的实际尺寸反复调整结构。完成零件制作与整机组装后，项目形成了集电机触觉反馈、图形界面和多种应用功能于一体的多功能智能旋钮。
 
 \subsection{硬件制作与整机装配}
-\placeholder
+
+\subsubsection{转接板}
+
+本项目的板卡采用 DengFOC-V3P 开发板及其配套电机驱动板。原版 SmartKnob 的 PCB 与元器件以 0402 封装为主，尺寸小、手工焊接难以保证质量，因此我们没有直接复刻其电路板，而是另做一块转接板，把分散的接口按功能集中组织。如图 \ref{fig:adapter} 所示，转接板正面以 8 pin 排母连接显示屏，中部排母插接到驱动板，下方 4 pin 排针排母引出 AS5600 编码器的 I\textsuperscript{2}C 信号，从而把显示屏、驱动板和编码器三条接口统一到一块板上。
+
+\begin{figure}[H]
+\centering
+\begin{minipage}[b]{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{figures/adapter_display.png}
+  \par\small 8 pin 排母接显示屏
+\end{minipage}\hfill
+\begin{minipage}[b]{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{figures/adapter_driver.png}
+  \par\small 排母插接驱动板
+\end{minipage}\hfill
+\begin{minipage}[b]{0.32\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{figures/adapter_encoder.png}
+  \par\small 4 pin 排针接编码器 I\textsuperscript{2}C
+\end{minipage}
+\caption{转接板的显示屏、驱动板与编码器接口}
+\label{fig:adapter}
+\end{figure}
+
+\subsubsection{外壳建模与装配}
+
+外壳及内部安装结构采用 SolidWorks 建模并以 3D 打印制作，如图 \ref{fig:shell} 所示。建模时按显示屏、电机、转接板、编码器与连接线的实际尺寸确定各安装定位，反复调整以保证结构强度与装配间隙；打印完成后，按磁铁与电机轴同轴、编码器与磁铁间距合适、显示屏固定稳固的要求完成装配。至此，转接板与外壳共同把分散的电气接口和机械零件组织为一个整体，为后续联调提供了稳定可靠的硬件基础。
+
+\begin{figure}[H]
+\centering
+\begin{minipage}[b]{0.48\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{figures/shell_model_1.png}
+\end{minipage}\hfill
+\begin{minipage}[b]{0.48\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{figures/shell_model_2.png}
+\end{minipage}
+\caption{SolidWorks 外壳建模}
+\label{fig:shell}
+\end{figure}
 
 \subsection{软硬件联调过程}
 \placeholder
